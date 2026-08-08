@@ -1,0 +1,15 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: curator
+role: 复盘与经验沉淀
+risk_ceiling: L1      # 该 Agent 允许触达的最高风险等级
+skills:
+  - postmortem-write
+  - runbook-rag
+inputs_from:  [verifier]
+outputs_to:   [-]
+can_not:
+  - 直接修改线上 Skill
+  - 未经 review 写入知识库
+trace:
+  span_per: 每次沉淀

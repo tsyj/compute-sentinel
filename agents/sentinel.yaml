@@ -1,0 +1,16 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: sentinel
+role: 多信号采集与进度语义判定
+risk_ceiling: L0      # 该 Agent 允许触达的最高风险等级
+skills:
+  - progress-probe
+  - resource-guard
+inputs_from:  [-]
+outputs_to:   [triage]
+can_not:
+  - 写任何文件
+  - 终止进程
+  - 修改配置
+trace:
+  span_per: 每轮巡检

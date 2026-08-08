@@ -1,0 +1,16 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: planner
+role: 恢复方案生成与风险分级
+risk_ceiling: L0      # 该 Agent 允许触达的最高风险等级
+skills:
+  - restart-planner
+  - config-precheck
+  - resource-guard
+inputs_from:  [triage]
+outputs_to:   [executor]
+can_not:
+  - 自行执行方案
+  - 把 L3 动作交给 Executor
+trace:
+  span_per: 每份方案

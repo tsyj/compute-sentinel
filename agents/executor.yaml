@@ -1,0 +1,17 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: executor
+role: 护栏内执行恢复动作
+risk_ceiling: L2      # 该 Agent 允许触达的最高风险等级
+skills:
+  - safe-kill
+  - restart-planner
+inputs_from:  [planner]
+outputs_to:   [verifier]
+can_not:
+  - 执行白名单外命令
+  - 跨用户操作
+  - 删除数据
+  - 无审批执行 L2 及以上
+trace:
+  span_per: 每个动作

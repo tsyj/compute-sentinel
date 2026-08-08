@@ -1,0 +1,14 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: verifier
+role: 恢复结果验证
+risk_ceiling: L0      # 该 Agent 允许触达的最高风险等级
+skills:
+  - restart-planner
+  - config-precheck
+inputs_from:  [executor]
+outputs_to:   [curator]
+can_not:
+  - 修改任何数据
+trace:
+  span_per: 每项检查

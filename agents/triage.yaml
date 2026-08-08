@@ -1,0 +1,15 @@
+# ComputeSentinel · Agent 定义草案
+# 复赛阶段映射为 AgentTeams Worker CRD
+name: triage
+role: 故障归类与根因候选
+risk_ceiling: L0      # 该 Agent 允许触达的最高风险等级
+skills:
+  - crash-triage
+  - runbook-rag
+inputs_from:  [sentinel]
+outputs_to:   [planner]
+can_not:
+  - 执行修复动作
+  - 无证据引用即下结论
+trace:
+  span_per: 每次诊断
