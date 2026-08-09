@@ -192,3 +192,95 @@ grep -n "restart_only\|history_only\|auxinput1_only\|MAX_HISTORY" \
 
 代码缺陷（结论 1、4）与具体算例无关，**对任何使用该版本 WRF 的用户都成立**，
 可整理后向上游反馈。
+
+---
+
+# 第二轮 · 从 restart 文件里读出硬数据
+
+源码读到边界之后，还有一步零成本检查没做：**直接看那个 restart 文件里存了什么闹钟状态**。
+（Planner 方案里也提到要 `ncdump -h` 确认。）
+
+## 读出的关键值
+
+被 bridge 热重启读入的 `wrfrst_d01_2024-09-06_00:00:00`（3.8 GB）里，195 个全局属性中有 107 个与闹钟相关：
+
+| 属性 | 值 | 换算 | 对应 |
+|---|---|---|---|
+| `WRF_ALARM_SECS_TIL_NEXT_RING_01` | 3600 | **60 分钟** | history 闹钟（`history_only = 1`） |
+| `WRF_ALARM_SECS_TIL_NEXT_RING_51` | 43200 | **720 分钟 = 12 小时** | restart 闹钟（`restart_only = 51`） |
+| `MAX_WRF_ALARMS` | 55 | — | 与代码里的 `2*25+5` **一致** |
+| `WRF_ALARM_ISRINGING_51` | 1 | — | 保存时 restart 闹钟处于**响铃态** |
+| `SIMULATION_START_DATE` | 2024-09-03_00:00:00 | — | production 起点 |
+
+旁证：production 的 restart 文件在磁盘上就是每 12 小时一个
+（`09-03_12:00`、`09-04_00:00`、`09-04_12:00`……`09-07_00:00`，各约 3.8 GB）。
+
+## 结论 5 · production 的 720 分钟从推断升级为事实
+
+Triage 当时只能标注 **"✅ 确认（来自注释自述，未直接看到 production namelist）"**，
+Planner 也原样传递了这个保留。
+
+现在有两条独立的直接证据：文件属性里的 `43200 秒`，以及磁盘上 12 小时一个的 restart 文件间隔。
+**这个值不再是推断。**
+
+## 结论 6 · history 机制得到数值级验证
+
+第一轮从源码推出的机制（"override 打开 → 块 2 整块跳过 → history 闹钟保留 namelist 原值"），
+现在可以用具体数字对上：
+
+| 运行 | 块 2 | history 闹钟的值 | 首次响铃 | 实测首个 wrfout |
+|---|---|---|---|---|
+| v2（override 关） | ✅ 执行 | 取文件里的 **3600 秒** | 00:00 + 1h = **01:00** | `wrfout_..._01:00:00` ✓ |
+| v3（override 开） | ❌ 跳过 | 保持 namelist 的 **180 分钟** | 00:00 + 3h = **03:00** | `wrfout_..._03:00:00` ✓ |
+
+**两行都精确吻合，误差为零。** 机制从"源码推断"变成"数值验证"。
+
+同时也彻底否掉了 Triage 的因果解释：
+文件里 history 闹钟存的是 3600 秒，而 namelist 写的是 180 分钟。
+如果 override 真的像 Triage 说的"覆盖了 history 闹钟"，
+那 v2/v3 都会用 180 分钟，两次的 wrfout 首帧应该一样 —— 但实测不一样。
+
+## 结论 7 · restart 闹钟为什么没响，仍然没有解决，但有了新线索
+
+按块 1 的逻辑（i=51 落在其循环范围 27..55 内，且外层无 override 守卫）：
+
+```
+守卫 IF (ierr .EQ. 0 .AND. seconds .GE. 0)   → 属性存在且 43200 ≥ 0，通过 ✓
+MAX_WRF_ALARMS 一致                          → 恢复逻辑不会被整体跳过 ✓
+override 打开 → seconds 改写为 namelist 的 540 分钟 = 32400 秒
+ringTime = curtime + 32400 秒 = 00:00 + 9h = 09:00
+运行窗口到 09:02
+```
+
+**按这条路径，restart 闹钟应该在 09:00 响。但实测 wrfrst 文件数是 0。**
+
+本文档不做推测性归因。但读出了一条**此前没注意到的新线索**：
+
+> `WRF_ALARM_ISRINGING_51 = 1`
+
+restart 闹钟在保存时处于**响铃态**（合理 —— 这个文件本身就是那次响铃写出来的）。
+而恢复代码里有：
+
+```fortran
+IF ( iring .EQ. 1 ) THEN
+  CALL WRFU_AlarmRingerOn( grid%alarms( i ) )
+```
+
+也就是说，**重启一开始就把 restart 闹钟的响铃状态重新打开了**。
+这个状态与随后 `WRFU_AlarmSet` 设置的 `RingTime` 如何交互，静态读代码判断不了 ——
+需要运行时才能观察。
+
+## 三轮下来的账
+
+| 问题 | 状态 | 花费 |
+|---|---|---|
+| production 的 restart 周期是多少 | ✅ **已确证 720 分钟** | 0（读文件属性） |
+| v2/v3 的 wrfout 时刻为何不同 | ✅ **机制已确证并数值验证** | 0（读源码 + 读属性） |
+| override 的 history 分支是否可达 | ✅ **确证为死代码** | 0（读源码） |
+| v3 的 restart 闹钟为何不响 | ⚠️ **仍开放**，但有了 `ISRINGING` 新线索 | 需运行时实验 |
+
+**三个问题被零成本的静态分析解决，第四个问题被收窄到一个具体的运行时观测点。**
+
+这就是 `config-precheck` 与 `crash-triage` 这类确定性能力的价值 ——
+它们不需要模型多聪明，只需要有人（或 Agent）**按顺序把便宜的检查做完再花钱**。
+Planner 把"读源码"排在"重跑"之前，是对的。
