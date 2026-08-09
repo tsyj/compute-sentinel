@@ -68,7 +68,7 @@ MCP / 适配器层（集群适配器 + 云产品 MCP，Mock 与真实共用 Sche
 证据与治理层（Incident State · Runbook 向量库 · OTel Trace · 网关凭证隔离）
 ```
 
-详见 [`docs/architecture.md`](docs/architecture.md) 与 [`docs/agent-identity.md`](docs/agent-identity.md)。
+六个 Agent 的完整 Identity 清单与协作拓扑见 [`docs/agent-identity.md`](docs/agent-identity.md)。
 
 ## 安全分级
 
@@ -97,14 +97,21 @@ evidence/    真实故障日志与运行证据（脱敏后）
 
 ## 状态
 
-初赛阶段为方案设计，尚无可运行实现。已完成：
+| 项 | 状态 |
+|---|---|
+| 问题定义与真实事故证据 | ✅ 三个案例，原始日志可复核 |
+| 六 Agent 职责与决策边界 | ✅ [`docs/agent-identity.md`](docs/agent-identity.md) |
+| 八 Skill 规格（含版本演进与能力评估） | ✅ [`skills/`](skills/) |
+| AgentTeams 部署与凭证隔离验证 | ✅ [证据案例 03](evidence/case-03-agentteams-deployment.md) |
+| `config-precheck` 可运行实现 + 实测 | ✅ [实测 01](evidence/measure-01-config-precheck.md)，四状态验证、真实配置零误报 |
+| 多 Agent 闭环实跑（Sentinel→Triage→Planner） | ✅ [实测 03](evidence/measure-03-agents-advanced-an-open-question.md) |
+| 可观测链路（Trace / Log / Metrics） | ⬜ 见 [`docs/roadmap.md`](docs/roadmap.md) |
+| MCP 等价集成契约 | ⬜ 同上 |
+| `progress-probe` 可运行原型 | ⬜ 同上 |
+| Executor 安全分级实证（L0–L3） | ⬜ 同上 |
+| workload adapter 全套 | ⬜ 同上 |
 
-- [x] 问题定义与真实事故证据
-- [x] 六 Agent 职责与决策边界
-- [x] 八 Skill 规格
-- [x] AgentTeams 能力映射
-- [ ] 最小闭环实现（复赛）
-- [ ] workload adapter 全套（复赛）
+**已跑通的部分都有可复核的证据；未做的部分在上表里，不含糊。**
 
 ## 开源、依赖与合规披露
 
