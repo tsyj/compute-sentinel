@@ -106,8 +106,79 @@ evidence/    真实故障日志与运行证据（脱敏后）
 - [ ] 最小闭环实现（复赛）
 - [ ] workload adapter 全套（复赛）
 
-## 开源
+## 开源、依赖与合规披露
 
-Apache License 2.0。
+本节按赛道要求逐项披露。**任何一项与实际不符都请以本仓库的运行记录为准。**
 
-计划把 `ProgressProbe` 的 workload adapter 规范与通用 Skill 贡献回上游 [AgentTeams](https://github.com/agentscope-ai/AgentTeams) 社区，而非独立 fork。
+### 开源范围与协议
+
+| 项目 | 说明 |
+|---|---|
+| 本项目协议 | **Apache License 2.0**（与上游 AgentTeams 一致） |
+| 开放范围 | Agent 定义、Skill 规格、workload adapter 规范、预检工具、证据与实测报告**全部开放** |
+| 暂不开放 | 原始运行日志中包含他人作业信息与内网路径的部分（脱敏后再发布，见 `evidence/README.md`） |
+| 上游贡献计划 | `progress-probe` 的 adapter 规范若通用，向 AgentTeams 提 PR；<br>部署过程中发现的两个易用性问题（见下）已可整理为 issue |
+
+### 第三方依赖
+
+| 依赖 | 版本 | 用途 | 协议 | 可替换性 |
+|---|---|---|---|---|
+| [AgentTeams](https://github.com/agentscope-ai/AgentTeams) | v1.2.2 | 多 Agent 编排运行时（**赛道必选**） | Apache-2.0 | 赛道要求，不替换 |
+| QwenPaw | 随 AgentTeams v1.2.2 | Worker 运行时 | 见上游 | 可换 OpenClaw / Hermes |
+| Higress | 随 AgentTeams 内置 | AI 网关，凭证隔离 | Apache-2.0 | 可换其他网关，但需自行实现凭证隔离 |
+| Docker | 29.6.1（snap） | 容器运行时 | Apache-2.0 | 可换 containerd/podman |
+| Python 标准库 | 3.9+ | `tools/config_precheck.py` **无第三方依赖** | PSF | — |
+
+### ⚠️ 商业 API 调用
+
+| 项目 | 说明 |
+|---|---|
+| 服务商 | **阿里云百炼（Model Studio）** |
+| 套餐 | Token Plan Standard，**2026-08-09 开通，2026-09-10 到期** |
+| 接口 | OpenAI 兼容协议，`https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| 调用环节 | **仅 Agent 推理**。`config_precheck` 等确定性工具**不调用任何模型** |
+| 费用假设 | 套餐制，含 5 小时 / 7 天双重限额；单次事故处理实测消耗约 20 万 token 量级 |
+| 权限范围 | API Key 权限为「全部」（宽于实际所需，后续应收窄至模型调用） |
+| 密钥管理 | 真实 Key **只存在于网关侧**，Worker 仅持消费令牌（见 [证据案例 03](evidence/case-03-agentteams-deployment.md) 的 401/200 对照实验） |
+| **锁定风险** | **中**。接口为 OpenAI 兼容协议，换供应商只需改 Base URL 与模型名；<br>但套餐到期（9-10）晚于复赛（9-3）、**早于决赛（9-22）**，需提前续期 |
+
+### ⚠️ 闭源模型使用
+
+| 项目 | 说明 |
+|---|---|
+| 模型 | **`qwen3.7-plus`**（闭源，通过百炼 API 调用） |
+| 使用范围 | Sentinel / Triage / Planner 三个 Agent 的推理 |
+| 选择原因 | 赛道承办方生态内、国内直连稳定、Token Plan 套餐已覆盖 |
+| 备选 | 同套餐内已实测可用：`qwen3.8-max`、`qwen3.7-max`、`qwen3.6-flash`、`deepseek-v4-pro`、`glm-5.2` |
+| 迁移成本 | **低**。模型名是一处配置项，Agent 定义与 Skill 规格与模型无关 |
+| **对可复现性的影响** | **有**。闭源模型输出不保证逐字复现。<br>因此本项目把**确定性能力**（`config-precheck` 静态检查、`progress-probe` 多信号比对）与**模型参与环节**（归类、表达）分开：<br>前者可精确复现（见 [实测 01](evidence/measure-01-config-precheck.md)），后者只保证结论要素可复核（每条结论必须挂证据引用） |
+
+### 数据来源与授权
+
+| 数据 | 来源 | 授权 | 处理 |
+|---|---|---|---|
+| 事故日志、配置、产物清单 | 作者本人在自有课题组集群上的真实运行 | 自有 | 发布前需脱敏主机名、绝对路径、他人作业信息 |
+| WRF 源码引用 | COAWST 构建树中的 WRF | 公开 | 仅引用行号与逻辑，未复制大段代码 |
+| 外部文献数据 | 公开论文与官方仓库 | 公开 | 均给出链接 |
+| **未使用** | 任何企业内部数据、个人信息、第三方非公开数据 | — | — |
+
+### 可复现方式与部署依赖
+
+```bash
+# 确定性部分（无需模型，无需网络）
+python3 tools/config_precheck.py --case <配置目录> --registry <WRF/Registry>
+bash tools/reproduce_case01.sh
+
+# Agent 部分（需 Docker + 模型 API Key）
+bash <(curl -sSL https://raw.githubusercontent.com/agentscope-ai/AgentTeams/main/install/agentteams-install.sh)
+agt apply -f agents/sentinel.worker.yaml   # triage / planner 同理
+```
+
+已知环境坑（实测踩过，见 [证据案例 03](evidence/case-03-agentteams-deployment.md)）：
+snap 版 Docker 不自动创建 `docker` 组、daemon 不继承代理、Docker Hub 需配镜像源；
+Worker 容器不继承 Manager 的 host-share 挂载；Matrix 房间内纯文本 `@name` 不构成 mention。
+
+### 后续维护计划
+
+初赛后按 `docs/roadmap.md` 推进：补齐可观测链路、MCP 等价契约、`progress-probe` 原型、
+Executor 安全分级实证。上游可复用的部分持续向 AgentTeams 社区提交。
