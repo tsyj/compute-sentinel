@@ -1,0 +1,302 @@
+Now I have all the evidence. Let me carefully analyze everything.
+
+## Evidence Summary
+
+### orchestrate.log (v2 run)
+```
+CHAIN[22:32:01]: waiting for bridge_v2 to finish (bridge.rc)
+CHAIN[00:38:03]: bridge_v2 exited rc=1
+CHAIN[00:38:03]: bridge rc=1 accepted (0 or benign ROMS STOP 1)
+CHAIN[00:38:03]: verifying 09:00 triplet
+CHAIN[00:38:03]: ABORT: WRF rst missing
+```
+
+### orchestrate_v3.log (v3 run)
+```
+CHAIN[01:28:18]: waiting for bridge_v2 to finish (bridge.rc)
+CHAIN[03:49:20]: bridge_v2 exited rc=1
+CHAIN[03:49:20]: bridge rc=1 accepted (0 or benign ROMS STOP 1)
+CHAIN[03:49:20]: verifying 09:00 triplet
+CHAIN[03:49:20]: ABORT: WRF rst missing
+```
+
+### bridge_v3.excerpt.log
+- First 20 lines: Shows startup at 01:26:31 CST, 160 ranks, hot-restart from Sep-06 00:00, window 9h02m to 09:02
+- Restart lines:
+  - Line 4: `Restart: ROMS prod rst rec6 (Sep-06 00:00) + wrfrst Sep-06 00:00 + SWAN cold-start`
+  - Line 6: `ROMS NRST=1620 -> rst @ 09:00 (abs-step 14580) ; WRF interval=540 -> wrfrst @ 09:00 ;`
+  - Lines 3379-3382: `RESTART run: opening wrfrst_d01_2024-09-06_00:00:00 for reading` (×4 ranks)
+- Last 15 lines:
+  - ROMS DONE at 3:48:39 AM
+  - SWAN: `+time 20240906.090200, step 271; iteration 1; sweep 4 grid 1`
+  - IEEE floating-point exceptions: `IEEE_INVALID_FLAG IEEE_DIVIDE_BY_ZERO IEEE_UNDERFLOW_FLAG`
+  - `STOP 1`
+  - `BRIDGE_EXIT rc=1 2026年 07月 18日 星期六 03:48:41 CST`
+
+### namelist.v2.input
+- `restart = .true.`
+- `restart_interval = 540`
+- No `override_restart_timers`
+- `run_hours = 9, run_minutes = 2`
+- Start: 2024-09-06 00:00
+- history_interval = 180
+
+### namelist.v3.input
+- `restart = .true.`
+- `restart_interval = 540`
+- `override_restart_timers = .true.`
+- Comments explain: hot-restart restores alarm from restart file (720 min), ignores new 540
+- Comments note: `override_restart_intervals` is NOT in this build's Registry → namelist-read FATAL
+- But `override_restart_timers` IS verified in this build's Registry
+
+### bridge_v2.filelist.txt
+- Contains: wrfout_d01_2024-09-06_01:00:00 (only 1 wrfout, at 01:00)
+- swan_rst.dat-001 through 008
+- yagi_*.nc files (ROMS outputs)
+- Yagi_*.nc files (SWAN outputs)
+- **wrfrst_* 文件数: 0** — ZERO restart files
+
+### bridge_v3.filelist.txt
+- Contains: wrfout_d01_2024-09-06_03:00:00 (only 1 wrfout, at 03:00)
+- swan_rst.dat-001 through 008
+- yagi_*.nc files
+- Yagi_*.nc files
+- **wrfrst_* 文件数: 0** — ZERO restart files
+
+## Analysis
+
+### Key observations:
+
+1. **Both runs completed their full time window** — ROMS DONE, SWAN reached step 271 at 09:02, bridge exited with rc=1 which is accepted as benign (ROMS STOP 1). The orchestrator itself says "bridge rc=1 accepted (0 or benign ROMS STOP 1)".
+
+2. **WRF produced wrfout but NOT wrfrst**:
+   - v2: wrfout_d01_2024-09-06_01:00:00 exists (history at 60 min = 01:00)
+   - v3: wrfout_d01_2024-09-06_03:00:00 exists (history at 180 min = 03:00)
+   - Wait, v2 has history_interval=180, but only wrfout at 01:00? That's 60 min. Let me re-check...
+   
+   Actually, looking more carefully at v2 filelist: `wrfout_d01_2024-09-06_01:00:00` — this is at 01:00. With history_interval=180 (3 hours), we'd expect outputs at 03:00, 06:00, 09:00. But we only see 01:00. That's odd.
+   
+   Wait, actually for v3, we see `wrfout_d01_2024-09-06_03:00:00` — that's at 03:00, which is 180 min from start. With history_interval=180, we'd expect 03:00, 06:00, 09:00. But only 03:00 is listed. This could mean the filelist only shows files that were fully written, or frames_per_outfile=1000 means all frames go into one file.
+
+   Actually wait — `frames_per_outfile = 1000` means all history frames go into a single file. So there should be only ONE wrfout file containing all time levels. For v2, that one file is `wrfout_d01_2024-09-06_01:00:00` — but the timestamp in the filename is the initialization time, not the data time. Actually in WRF, wrfout files are named by the analysis time of the first frame... no, they're named by the time of the first data in that file.
+
+   Hmm, actually the wrfout naming convention: `wrfout_d01_2024-09-06_01:00:00` — this would be the file containing data starting at 01:00. But if frames_per_outfile=1000, all frames are in one file. So for v2, the wrfout file starts at 01:00? That doesn't match start at 00:00 with history_interval=180.
+
+   Actually, I think the filelist is just showing what files exist. The naming convention might vary. Let me not get too deep into this — the critical point is:
+   
+   **wrfrst_* count is 0 in both runs.** This is the smoking gun.
+
+3. **The restart alarm mechanism**:
+   - The v3 namelist comments explicitly state: "a hot-restart run RESTORES the write-restart alarm from the restart file, which was set at production restart_interval=720"
+   - So the restart file (wrfrst_d01_2024-09-06_00:00:00) that WRF reads at startup contains an alarm set for 720 minutes
+   - WRF honors 720 min → next wrfrst would be at 720 min = 12 hours from start
+   - But the run is only 9h02m = 542 min
+   - So the 720-min alarm NEVER fires during this run → no wrfrst written
+
+4. **v2 (no override)**:
+   - restart_interval=540 in namelist
+   - But hot-restart restores alarm from restart file at 720 min
+   - 720 > 542 (run length) → alarm never fires → no wrfrst
+   
+5. **v3 (with override_restart_timers=.true.)**:
+   - restart_interval=540 in namelist
+   - override_restart_timers=.true. should force WRF to re-initialize alarm from namelist
+   - BUT: the filelist still shows 0 wrfrst files
+   - The comments in namelist.v3.input say: "With override_restart_timers=.true.: restart_interval=540 -> 09:00 wrfrst fires"
+   - But it DIDN'T fire. Why?
+
+   Wait, let me re-read the v3 namelist comments more carefully:
+   
+   ```
+   ! CROWN v3 FIX (WRF DEEP PIT): a hot-restart run RESTORES the write-restart alarm from the
+   ! restart file, which was set at production restart_interval=720. WRF then honors 720 and
+   ! IGNORES the new 540 -> in v2 the 540-min (09:00) wrfrst was NEVER written (zero wrfrst).
+   ! The switch that forces WRF to RE-INITIALIZE the restart (and history) alarm from the
+   ! namelist value at restart time is override_restart_timers (verified in this build's
+   ! Registry io_boilerplate_temporary.inc + WRF/share/input_wrf.F L263-271). NOTE: the generic
+   ! name "override_restart_intervals" is NOT in this build's Registry -> namelist-read FATAL.
+   ! With override_restart_timers=.true.: restart_interval=540 -> 09:00 wrfrst fires.
+   override_restart_timers             = .true.,
+   ```
+
+   So the comment says override_restart_timers IS verified in this build. But the wrfrst still wasn't written. 
+
+   Let me think about this more carefully. The bridge_v3.excerpt.log shows:
+   - Lines 3379-3382: `RESTART run: opening wrfrst_d01_2024-09-06_00:00:00 for reading` — this is WRF reading the restart file
+   - But there's no log line showing WRF writing a wrfrst file
+   - The run ended with ROMS DONE, SWAN step 271, then STOP 1
+
+   Wait — the excerpt only shows "首 20 行", "restart 相关（前 6 条）", and "末 15 行". It's an excerpt, not the full log. There might be more in the middle that we're not seeing. But the filelist definitively shows 0 wrfrst files.
+
+   So the question is: **why did override_restart_timers=.true. not work in v3?**
+
+   Possibilities:
+   a) The switch name is correct but doesn't actually do what the comment claims
+   b) The switch works for restart alarms but there's another mechanism preventing the write
+   c) The switch was read correctly but something else overrode it
+   d) The WRF code path for restart write was never reached due to timing
+
+   Actually, let me reconsider. The run is 9h02m = 542 minutes. restart_interval=540 means the restart should fire at minute 540 = 09:00. The run ends at 09:02. So there's a 2-minute window.
+
+   But wait — if override_restart_timers works, the alarm would be set at 540 min. But what if the alarm was restored from the restart file at 720 min AND override_restart_timers didn't actually override it? Then the alarm at 720 min would never fire in a 542-min run.
+
+   Actually, I need to think about this differently. Let me look at what the v3 log tells us:
+   - The log header says "WRF interval=540 -> wrfrst @ 09:00" — this is the orchestrator's expectation
+   - But the actual WRF behavior shows 0 wrfrst files
+
+   The most likely explanation: **override_restart_timers=.true. was set in the namelist but either:**
+   1. It was not actually read/applied by WRF (perhaps the Registry entry exists but the code path doesn't actually use it to override the alarm)
+   2. OR there's a subtlety: the restart alarm from the restart file is at 720 min, and override_restart_timers may only affect the *next* alarm calculation, but since the run started from a restart that was written at a time when the next restart was expected at 720 min, the alarm is already set and override doesn't reset it
+
+   Actually, looking at this from a WRF internals perspective:
+   - When WRF does a hot restart (restart=.true.), it reads the restart file
+   - The restart file contains the alarm settings from the previous run
+   - The previous (production) run had restart_interval=720
+   - So the alarm in the restart file is set for 720 min from the restart file's base time
+   - override_restart_timers=.true. is supposed to force WRF to recalculate the alarm from the namelist's restart_interval value
+   
+   If override_restart_timers is working correctly, the alarm should be at 540 min. But it's not firing. 
+
+   Hmm, but wait — there's another possibility. What if the issue is that `restart_interval` in WRF is in minutes, and 540 min = 9 hours. The run is 9h02m. So the alarm should fire at 9h00m, which is 2 minutes before the end. That should work.
+
+   Unless... the alarm is calculated differently. In WRF, restart_interval can be specified in minutes. If the alarm was restored from the restart file as 720 minutes from the start time (00:00), that's 12:00. The run ends at 09:02. So 720-min alarm never fires.
+
+   If override_restart_timers works, it should reset the alarm to 540 min from start = 09:00. The run ends at 09:02. So the alarm should fire.
+
+   But it didn't. So either:
+   1. override_restart_timers didn't actually override (code bug, or the switch doesn't do what's claimed)
+   2. There's a different mechanism at play
+
+   Actually, let me re-read the namelist.v3.input comment more carefully:
+   
+   ```
+   ! The switch that forces WRF to RE-INITIALIZE the restart (and history) alarm from the
+   ! namelist value at restart time is override_restart_timers (verified in this build's
+   ! Registry io_boilerplate_temporary.inc + WRF/share/input_wrf.F L263-271).
+   ```
+   
+   This says "verified in this build's Registry". But verification in the Registry doesn't mean the code actually implements the override correctly. It just means the namelist variable is registered and won't cause a read error.
+
+   And then:
+   ```
+   ! NOTE: the generic name "override_restart_intervals" is NOT in this build's Registry -> namelist-read FATAL.
+   ```
+   
+   This confirms they tried `override_restart_intervals` first and it caused a fatal error. Then they switched to `override_restart_timers` which IS in the Registry.
+
+   But the result is still 0 wrfrst files. So the most likely root cause is:
+
+   **`override_restart_timers=.true.` is registered in the WRF build's Registry (so it doesn't cause a namelist read error), but it does NOT actually override the restart alarm restored from the restart file.** The restart alarm remains at 720 min (from the production run), which exceeds the 542-min bridge window, so wrfrst is never written.
+
+   This is a **configuration error** combined with a **WRF build limitation** — the specific WRF build doesn't properly implement the override_restart_timers functionality despite having it registered.
+
+   Actually wait, I should be more careful. Let me reconsider whether there could be another explanation.
+
+   Looking at the v3 bridge log excerpt again:
+   - Lines 3379-3382 show WRF opening the restart file for reading
+   - But the excerpt is limited — we only see first 20 lines, restart-related lines, and last 15 lines
+   - There could be error messages in the middle about override_restart_timers being ignored
+
+   But the definitive evidence is the filelist: 0 wrfrst files. The override didn't work.
+
+   Let me also consider: could the run have crashed before reaching the 540-min mark?
+   - ROMS DONE at 03:48:39 — this is wall clock, not simulation time
+   - SWAN reached step 271 at time 20240906.090200 (Sep-06 09:02) — this is the END of the simulation
+   - So all three models (ROMS, SWAN, WRF) completed their computation
+   - The bridge exited with rc=1, but the orchestrator accepts this as benign
+
+   So the models ran to completion. WRF just didn't write the restart file.
+
+   Now, another important detail: the v2 filelist shows `wrfout_d01_2024-09-06_01:00:00` and v3 shows `wrfout_d01_2024-09-06_03:00:00`. 
+   
+   Wait — v2 has history_interval=180 (3 hours). With frames_per_outfile=1000, all frames go in one file. The file should be named wrfout_d01_2024-09-06_03:00:00 (first frame at 03:00). But v2 shows wrfout at 01:00:00. That's only 60 minutes from start. That's inconsistent with history_interval=180.
+
+   Hmm, actually in WRF, the wrfout filename timestamp is the *analysis time* of the first frame in the file. For a restart run starting at 00:00 with history_interval=180, the first history output would be at 03:00. So the file should be named wrfout_d01_2024-09-06_03:00:00.
+
+   But v2 shows `wrfout_d01_2024-09-06_01:00:00`. This is puzzling. Unless the history alarm was also affected by the restart file's alarm settings?
+
+   Actually, wait. The v3 namelist comment says: "The switch that forces WRF to RE-INITIALIZE the restart (and history) alarm from the namelist value at restart time is override_restart_timers". So override_restart_timers affects BOTH restart and history alarms.
+
+   In v2 (no override), the history alarm from the restart file might also be restored. If the production run had a different history_interval, the history output timing could be different from what the namelist says.
+
+   But v2 shows wrfout at 01:00 — that's 60 min from start. And v3 shows wrfout at 03:00 — that's 180 min from start, matching history_interval=180.
+
+   This is interesting: v3 (with override_restart_timers=.true.) got history output at the correct 180-min interval, while v2 (without override) got history output at 60 min. This suggests:
+   - In v2, the history alarm from the restart file was at 60 min (maybe the production run had history_interval=60?)
+   - In v3, override_restart_timers=.true. successfully reset the history alarm to 180 min
+
+   If override_restart_timers successfully reset the HISTORY alarm (evidence: v3 wrfout at 03:00 = 180 min), why didn't it reset the RESTART alarm?
+
+   Unless... it DID reset the restart alarm to 540 min, but something else prevented the restart write. 
+
+   Hmm, let me think about this differently. In v3:
+   - History alarm: reset to 180 min → wrfout at 03:00 ✓ (evidence: wrfout_d01_2024-09-06_03:00:00 exists)
+   - Restart alarm: should be reset to 540 min → wrfrst at 09:00
+   - But wrfrst count is 0
+
+   Wait, but v3 only shows ONE wrfout file at 03:00. With history_interval=180 and a 9h02m run, we'd expect outputs at 03:00, 06:00, 09:00. But frames_per_outfile=1000 means all frames go in one file. So there's only one wrfout file, named by the first frame's time (03:00). That's consistent.
+
+   But for restart: restart_interval=540 means one restart at 540 min = 09:00. The run ends at 09:02. So the restart should have been written. But it wasn't.
+
+   Could there be a timing issue? The restart write at 09:00 requires WRF to actually execute the restart write routine at that simulation time. If WRF's internal time stepping skipped past 09:00 without triggering the alarm... but that seems unlikely with a 18-second time step.
+
+   Actually, I just realized something. Let me look at the v2 wrfout more carefully.
+
+   v2: `wrfout_d01_2024-09-06_01:00:00` — 7.1GB file
+   v3: `wrfout_d01_2024-09-06_03:00:00` — 1.8GB file
+
+   The v2 file is much larger (7.1GB vs 1.8GB). If frames_per_outfile=1000 and all frames go in one file:
+   - v2: history alarm restored from restart file at 60 min → frames at 01:00, 02:00, 03:00, 04:00, 05:00, 06:00, 07:00, 08:00, 09:00 = 9 frames → larger file
+   - v3: history alarm reset to 180 min → frames at 03:00, 06:00, 09:00 = 3 frames → smaller file
+
+   This is consistent! The v2 file has 9 frames (60-min interval) and v3 has 3 frames (180-min interval). The file sizes confirm this ratio (7.1/1.8 ≈ 3.9, close to 9/3 = 3, with some overhead).
+
+   So override_restart_timers=.true. DID work for the history alarm (changed from 60 to 180 min). But it DIDN'T work for the restart alarm (still at 720 min, never fires in 542-min run).
+
+   Wait, but the comment says "restart (and history) alarm". If it works for history, why not for restart?
+
+   Unless the implementation in this specific WRF build only overrides the history alarm but not the restart alarm. That would be a code bug or incomplete implementation.
+
+   OR — another possibility — the restart alarm is handled differently. In WRF, the restart write might be controlled by a different mechanism than the history write. The restart alarm might be stored in a different part of the restart file and might not be affected by override_restart_timers.
+
+   Actually, I think I need to be honest about the limits of my evidence. I can see:
+   1. override_restart_timers=.true. changed the history output behavior (v2: 60-min → v3: 180-min)
+   2. But wrfrst is still 0 in v3
+   3. The restart alarm from the production run (720 min) was not overridden
+
+   The most likely root cause: **In this WRF build, `override_restart_timers=.true.` overrides the history alarm but NOT the restart alarm.** The restart alarm remains at 720 min (restored from the restart file), which exceeds the 542-min bridge window.
+
+   But wait, I should also consider: maybe the restart alarm WAS overridden to 540 min, but the restart write failed for a different reason (e.g., I/O error, disk full, wrong path). But the filelist shows other large files were written successfully, and there's no error message in the excerpt.
+
+   Actually, let me reconsider the whole picture. The namelist.v3.input comment says:
+   ```
+   ! With override_restart_timers=.true.: restart_interval=540 -> 09:00 wrfrst fires.
+   ```
+   
+   This is a COMMENT written by the person who set up the experiment. It's their EXPECTATION, not an observation. The actual observation is that wrfrst was NOT written. So the expectation was wrong.
+
+   Let me now formulate my diagnosis:
+
+## Root Cause Classification
+
+**Class**: 配置错误 / 依赖库与环境问题 (Configuration error / Build limitation)
+
+**Root cause**: WRF hot-restart 模式下，restart alarm 从 restart 文件恢复为 720 分钟（来自 production run 的 restart_interval）。v2 的 namelist 设置 restart_interval=540 被忽略。v3 尝试用 override_restart_timers=.true. 修复，但该开关在此 WRF build 中**未能成功覆盖 restart alarm**（尽管它成功覆盖了 history alarm）。
+
+**Evidence**:
+1. 两次 wrfrst 文件数均为 0 — `bridge_v2.filelist.txt:末行`, `bridge_v3.filelist.txt:末行`
+2. WRF 读 restart 文件 — `bridge_v3.excerpt.log:3379-3382`
+3. v2 无 override — `namelist.v2.input:21` (restart_interval=540, 无 override)
+4. v3 有 override 但无效 — `namelist.v3.input:28` (override_restart_timers=.true.) + `bridge_v3.filelist.txt:末行` (wrfrst 仍为 0)
+5. override 对 history 有效（间接证据）— v2 wrfout 在 01:00（60-min alarm from restart file），v3 wrfout 在 03:00（180-min alarm from namelist）— `bridge_v2.filelist.txt` vs `bridge_v3.filelist.txt`
+6. 作业正常完成 — `bridge_v3.excerpt.log:末15行` (ROMS DONE, SWAN step 271 @ 09:02)
+7. rc=1 是良性退出 — `orchestrate_v3.log:3` ("bridge rc=1 accepted (0 or benign ROMS STOP 1)")
+
+**Benign exit**: 是。rc=1 来自 SWAN 的 IEEE 浮点异常 STOP 1，是耦合运行的正常终止方式。编排器也明确接受了这个退出码。
+
+**Missing evidence**:
+- WRF 完整运行日志（非 excerpt）— 无法确认 override_restart_timers 是否被读取、是否有 warning/error 信息
+- WRF 源码中 override_restart_timers 的具体实现 — 无法确认是代码 bug 还是配置问题
+- Production run 的 restart_interval 值 — 720 min 是从注释推断的，未直接看到 production namelist
+
+Now let me write up my diagnosis in the required format.
