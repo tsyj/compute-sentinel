@@ -1,0 +1,183 @@
+* Now I have all the evidence. Let me produce the formal recovery plan.
+
+---
+
+## Planner 恢复方案
+
+### 前置确认（基于我对全部 6 份材料的逐行核查）
+
+| 事实 | 证据 | 确认状态 |
+|---|---|---|
+| Bridge 窗口 = 542 min (9h02m) | `namelist.v3.input:3-4`: `run_hours=9, run_minutes=2` | ✅ 确认 |
+| Bridge namelist restart_interval = 540 min | `namelist.v3.input:21`: `restart_interval = 540` | ✅ 确认 |
+| Production restart_interval = 720 min | `namelist.v3.input:29-30` 注释；`namelist.v2.input:5` 注释 | ✅ 确认（来自注释自述，未直接看到 production namelist） |
+| v3 override_restart_timers=.true. | `namelist.v3.input:37` | ✅ 确认 |
+| v2 无 override 开关 | `namelist.v2.input` 全文无 override 行 | ✅ 确认 |
+| override 对 history 有效 | `bridge_v2.filelist.txt:11` wrfout 首帧01 vs `bridge_v3.filelist.txt:11` wrfout 首帧03 (=180min from namelist) | ✅ 确认 |
+| override 对 restart 无效 | `bridge_v2.filelist.txt:末行` wrfrst=0; `bridge_v3.filelist.txt:末行` wrfrst=0 | ✅ 确认 |
+| ROMS restart 正常产出 | `bridge_v3.filelist.txt:57` `yagi_rst.nc` 64MB | ✅ 确认 |
+| SWAN restart 正常产出 | `bridge_v3.filelist.txt:4-11` 8 个 `swan_rst.dat` | ✅ 确认 |
+| Bridge 良性退出 | `orchestrate_v3.log:3` `bridge rc=1 accepted`; `bridge_v3.excerpt.log:末3行` IEEE STOP 1 → BRIDGE_EXIT rc=1 | ✅ 确认 |
+
+---
+
+### 回答你的三个问题
+
+**Q1：中途死了 vs 正常跑完但没产出该产出的东西？**
+
+**后者（正常跑完但缺产物）。** 与 Sentinel 判定一致。
+
+**Q2：为什么？**
+
+根因链（triage 归类，我补充配置层面的精确分析）：
+
+1. Bridge 从 `wrfrst_d01_2024-09-06_00:00:00` 做 hot-restart（`bridge_v3.excerpt.log:3379-3382`，4 个 MPI rank 各读一次）
+2. WRF hot-restart 从该 restart 文件**恢复了 write-restart alarm = 720 min**（production 的 restart_interval）
+3. Bridge 窗口 = 542 min < 720 min → alarm 永远不会响 → wrfrst 永远不会写入
+4. v3 尝试 `override_restart_timers=.true.` 覆盖 alarm：
+   - **对 history alarm 成功**：v2 wrfout 首帧@01:00（720-min 恢复值），v3 wrfout 首帧@03:00（namelist `history_interval=180`）
+   - **对 restart alarm 失败**：wrfrst 文件数仍为 0
+5. 结论：此 WRF build 的 `override_restart_timers` 实现**只覆盖 history alarm，不覆盖 restart alarm**
+
+**Q3：能不能续跑？**
+
+```
+resumable: no
+```
+
+**原因：不存在有效的续跑断点。**
+
+- wrfrst_d01_2024-09-06_09:00:00 **从未被写入** — 这是链条要求的 09:00 三模型同步点
+- v3 的 ROMS restart (`yagi_rst.nc` 09) 和 SWAN restart (`swan_rst.dat` @09:00) 虽然存在，但 **WRF 没有对应的 restart 文件**
+- WRF 无法从 wrfout（history 文件）做 hot-restart — 它需要 wrfrst（restart 文件）
+- 没有 WRF restart → 下一段耦合无法初始化 WRF → 链条无法继续
+
+**缺什么才能续跑：** 一个在 09:00（或窗口内任何时刻）的合法 `wrfrst` 文件。当前没有任何路径能获得它——除非修复配置后重跑 bridge。
+
+---
+
+### 恢复方案
+
+```yaml
+resumable: no
+resume_point: >
+  无有效断点。wrfrst 从未写入，WRF 无法 hot-restart。
+  唯一路径：修复 restart alarm 问题后，从 Sep-06 00:00 重新跑 bridge（全量重跑）。
+steps:
+  - action: >
+      L0 源码确认：检查 WRF build 中 override_restart_timers 的实现
+      (WRF/share/input_wrf.F L263-271 及 io_boilerplate_temporary.inc)，
+      确认它是否设计为只覆盖 history alarm 而不覆盖 restart alarm。
+      如果是，则需要走 Step 2A 或 2B；如果有其他开关（如 restart_interval 的
+      特殊值、或不同的 override 名），则可能只需改 namelist。
+    risk_level: L0
+    idempotent: true
+    rollback: 只读操作，无需回滚
+    evidence: "namelist.v3.input:33 声称 verified at input_wrf.F L263-271"
+
+  - action: >
+      [方案 A — 推荐] 重跑 production 段，将 production restart_interval 从 720 
+      改为 540（或 540 的因子如 270/180），使新生成的 wrfrst 中嵌入的 restart 
+      alarm ≤ bridge 窗口 (542 min)。然后用新 wrfrst 重跑 bridge。
+    risk_level: L2
+    idempotent: true
+    rollback: >
+      保留当前 wrfrst_d01_2024-09-06_00:00:00 不删除（备份为 wrfrst.720min.bak）。
+      如果新 production 跑失败，恢复旧 wrfrst 即可回到当前状态。
+    evidence: >
+      namelist.v3.input:29-30 注释确认 production restart_interval=720 是 alarm 
+      来源；namelist.v2.input:5 注释 "production restart_interval=720 proves 
+      clean multiple-firing"
+
+  - action: >
+      [方案 B — 备选] 如果 production 重跑代价过高，尝试用 ncdump/ncks 直接
+      编辑现有 wrfrst_d01_2024-09-06_00:00:00 中的 restart alarm 变量，
+      将 720 min 改为 540 min。然后直接重跑 bridge。
+    risk_level: L3
+    idempotent: false
+    rollback: >
+      编辑前 cp wrfrst 为 wrfrst.original.nc。如果 WRF 读取被修改后的 wrfrst 
+      报错或行为异常，恢复 original 文件即可。
+    evidence: >
+      WRF restart 文件是 NetCDF 格式，alarm 值通常存储在特定变量/属性中。
+      但具体变量名和格式需要 L0 检查确认（ncdump -h wrfrst 查看）。
+      风险在于：alarm 可能不是简单的标量属性，可能与 WRF 内部状态耦合。
+
+  - action: >
+      [方案 C — 保守] 如果不确定 override_restart_timers 的行为，先做一个
+      短窗口测试：bridge 窗口设为 60 min，restart_interval 设为 30 min，
+      验证 wrfrst 是否在 30 min 被写入。如果写入，说明 override 对 restart 
+      也有效（只是 540 > 542 的问题）；如果不写入，确认 override 对 restart 
+      无效，必须走方案 A 或 B。
+    risk_level: L1
+    idempotent: true
+    rollback: 测试运行，产物在独立目录，不影响现有数据
+    evidence: >
+      短测试约 10-15 分钟即可完成（vs 全量 bridge 2+ 小时），
+      可快速排除不确定性。
+
+  - action: >
+      修复确认后，重跑 bridge（从 Sep-06 00:00 到 09:02，全量）。
+      运行前确认 wrfrst 中的 restart alarm ≤ 542 min。
+    risk_level: L2
+    idempotent: true
+    rollback: >
+      保留 v2/v3 产物目录不删除。如果 v4 仍失败，回退到 v3 配置重新分析。
+    evidence: "两次全量 bridge 各 ~2h15m wall-time"
+
+  - action: >
+      验证 v4 产物：确认 wrfrst_d01_2024-09-06_09:00:00 存在且大小合理
+      （应 >0 bytes），然后手动或通过编排器触发链条继续。
+    risk_level: L1
+    idempotent: true
+    rollback: 验证操作，不修改任何数据
+    evidence: "orchestrate_v3.log:5 ABORT 条件是 wrfrst missing"
+
+config_patches:
+  - >
+    [方案 A] production namelist: restart_interval 从 720 改为 540
+    （需修改 production 段的 namelist，非 bridge 段）
+  - >
+    [方案 A/B/C 通用] bridge namelist 保持:
+    restart_interval = 540
+    override_restart_timers = .true.  (保留，对 history 有效)
+  - >
+    [方案 B] wrfrst 文件内 restart alarm 变量: 720 → 540
+    (需 L0 检查确认具体变量名)
+
+cost_estimate: >
+  方案 A: production 重跑代价未知（取决于 production 段长度和计算资源）
+          + bridge 重跑 ~2h15m wall-time × 160 MPI ranks = ~350 rank-hours
+  方案 B: ncdump/ncedit < 30 min + bridge 重跑 ~350 rank-hours
+  方案 C: 短测试 ~15 min × 160 ranks = ~40 rank-hours
+          + (如果通过) bridge 重跑 ~350 rank-hours
+  已沉没成本: v2 + v3 = ~4h30m × 160 ranks = ~720 rank-hours（不可回收）
+
+preconditions:
+  - >
+    [必须] 确认 override_restart_timers 对 restart alarm 的行为
+    （L0 源码检查 或 L1 短窗口测试）
+  - >
+    [方案 A 必须] 确认 production 段可重跑、有上游边界条件数据、
+    重跑代价可接受
+  - >
+    [方案 B 必须] ncdump -h wrfrst 确认 restart alarm 存储位置和格式，
+    且修改后 WRF 能正常读取
+  - >
+    [通用] 确认下游链条对 wrfrst 的精确需求：
+    是必须 09:00 时刻的，还是任何时刻的 wrfrst 都可以？
+    如果是 09:00，则 bridge 窗口和 restart_interval 必须精确配合
+```
+
+### 关键不确定性（我看不出来的）
+
+1. **production 段的重跑代价** — 我没有 production namelist 和运行日志，不知道 production 跑了多久、从哪个断点开始、上游数据是否还在
+2. **override_restart_timers 的精确实现** — 没有 WRF 源码，无法确认它是设计如此（只覆盖 history）还是 bug（应该覆盖 restart 但没覆盖）
+3. **wrfrst 文件的内部结构** — 没有 ncdump 输出，不知道 restart alarm 存储在哪个变量/属性里，方案 B 可行性未验证
+4. **下游链条对 wrfrst 时刻的精确要求** — 如果只要求"有一个 wrfrst"而不要求"必须是 09:00"，可能有更简单的绕过路径
+
+---
+
+@sentinel 方案已出。**推荐路径：先做 L0 源码检查 + L1 短窗口测试（方案 C），确认 override 行为后，走方案 A（重跑 production + 重跑 bridge）。** 方案 B（直接编辑 wrfrst）标记为 L3 备选，仅在 production 重跑代价不可接受时考虑。
+
+<!-- ⟧ Planner 完成恢复方案：resumable=no（wrfrst 从未写入，无有效断点），推荐路径 L0 源码检查 → L1 短测试 → L2 重跑 production+bridge，备选 L3 直接编辑 wrfrst -->
