@@ -1,0 +1,110 @@
+==========================================================================
+Metrics
+==========================================================================
+  span 总数        : 56
+  时间跨度        : 00:21:49 → 01:27:03  (3914s)
+  会话数（事故房间）: 1
+  每 Agent span    : triage=31, sentinel=15, planner=10
+  工具调用分布     : Read=29, Bash=22, Glob=5
+  放行决策分布     : allow=56
+  ⚠ 无沙箱执行     : 22 / 56  (39%)
+
+==========================================================================
+Trace（按会话聚合；一个会话 = 一个事故房间）
+==========================================================================
+
+  会话 matrix  —  56 个 span
+    00:21:49  sentinel  Bash   allow  ls -la /host-share/compute-sentinel-demo/incident-001/ && echo "---" && 
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:21:52  sentinel  Bash   allow  ls /host-share/ 2>&1; echo "---"; ls /host-share/compute-sentinel-demo/ 
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:21:55  sentinel  Bash   allow  pwd; ls; find . -maxdepth 3 -type d 2>/dev/null | head -50
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:21:58  sentinel  Bash   allow  ls shared/ 2>&1; echo "---"; find / -path "*/incident-001*" 2>/dev/null 
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:22:08  sentinel  Bash   allow  mount | grep -i share; echo "---"; ls /host* 2>&1; echo "---"; ls /mnt/ 
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:22:11  sentinel  Bash   allow  find shared/ -type f 2>/dev/null | head -30
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:22:16  sentinel  Bash   allow  ls media/ 2>&1 | head -20; echo "---"; find . -name "*.log" -o -name "na
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:28:52  sentinel  Bash   allow  cd /root/agentteams-fs && ls -la shared/knowledge/incident-001/ 2>&1; ec
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:28:58  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/bridge_v3.excerpt
+    00:28:58  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate_v3.lo
+    00:28:58  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate.log
+    00:29:09  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v2.file
+    00:29:09  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v3.file
+    00:29:17  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v2.in
+    00:29:17  sentinel  Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v3.in
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/outputs/bridge_v3.filelis
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/configs/namelist.v2.input
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/logs/orchestrate_v3.log
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/outputs/bridge_v2.filelis
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/logs/bridge_v3.excerpt.lo
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/configs/namelist.v3.input
+    00:30:33  triage    Read   allow  /host-share/compute-sentinel-demo/incident-001/logs/orchestrate.log
+    00:30:38  triage    Glob   allow  /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/**/bridge_
+    00:30:38  triage    Glob   allow  /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/**/namelis
+    00:30:38  triage    Glob   allow  /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/**/bridge_
+    00:30:38  triage    Glob   allow  /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/**/*incide
+    00:30:38  triage    Glob   allow  /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/**/orchest
+    00:30:43  triage    Bash   allow  ls -la /root/agentteams-fs/agents/triage/.qwenpaw/workspaces/default/sha
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:30:43  triage    Bash   allow  find / -name "orchestrate.log" -o -name "bridge_v3.excerpt.log" -o -name
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:30:48  triage    Bash   allow  find /root/agentteams-fs/shared/knowledge/incident-001/ -type f | sort
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v2.file
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate.log
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v3.in
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v3.file
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate_v3.lo
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/bridge_v3.excerpt
+    00:30:56  triage    Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v2.in
+    00:32:54  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && grep -n "overrid
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:54  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && grep -n "wrfout"
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:54  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && wc -l logs/* con
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:54  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && grep -n "wrfrst"
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:59  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && cat -n logs/brid
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:59  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && cat -n logs/orch
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:32:59  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && cat -n logs/orch
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:33:04  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && grep -n "restart
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    00:33:04  triage    Bash   allow  cd /root/agentteams-fs/shared/knowledge/incident-001 && grep -n "restart
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    01:25:58  planner   Bash   allow  ls -la /root/agentteams-fs/shared/knowledge/incident-001/
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    01:26:03  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate.log
+    01:26:03  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v2.in
+    01:26:03  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/configs/namelist.v3.in
+    01:26:03  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/orchestrate_v3.lo
+    01:26:07  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v2.file
+    01:26:07  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/bridge_v3.excerpt
+    01:26:07  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/outputs/bridge_v3.file
+    01:26:11  planner   Bash   allow  wc -l /root/agentteams-fs/shared/knowledge/incident-001/logs/bridge_v3.e
+                ⚠ 未沙箱执行 ⚠ 沙箱不可用  ← sandbox unavailable (Cannot read /sys/kernel/security/lsm), running unsandboxed
+    01:27:03  planner   Read   allow  /root/agentteams-fs/shared/knowledge/incident-001/logs/bridge_v3.excerpt
+
+==========================================================================
+Log（各 Worker 运行时日志中的关键行）
+==========================================================================
+  sentinel: 58 条关键行
+    2026-08-09 20:48:50,600 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=sentinel count=1 files=['.qwenpaw/matrix_sync
+    2026-08-09 20:49:20,843 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=sentinel count=1 files=['.qwenpaw/matrix_sync
+    2026-08-09 20:49:51,257 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=sentinel count=1 files=['.qwenpaw/matrix_sync
+  triage: 58 条关键行
+    2026-08-09 20:48:50,374 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=triage count=1 files=['.qwenpaw/matrix_sync_t
+    2026-08-09 20:49:20,614 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=triage count=1 files=['.qwenpaw/matrix_sync_t
+    2026-08-09 20:49:50,974 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=triage count=1 files=['.qwenpaw/matrix_sync_t
+  planner: 60 条关键行
+    2026-08-09 20:48:49,275 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=planner count=1 files=['.qwenpaw/matrix_sync_
+    2026-08-09 20:49:19,543 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=planner count=1 files=['.qwenpaw/matrix_sync_
+    2026-08-09 20:49:49,963 [INFO] qwenpaw_worker.sync: qwenpaw FileSync push uploaded component=sync worker=planner count=1 files=['.qwenpaw/matrix_sync_
