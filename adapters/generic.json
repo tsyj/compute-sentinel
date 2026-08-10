@@ -1,0 +1,9 @@
+{
+  "workload": "generic",
+  "description": "兜底适配器，接入新场景前的临时选择",
+  "progress_line_regex": ".",
+  "output_globs": ["*"],
+  "first_progress_sec": 900,
+  "stall_sec": 1200,
+  "notes": "使用兜底适配器时，判定结果必须标注精度下降"
+}

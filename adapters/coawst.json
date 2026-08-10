@@ -1,0 +1,9 @@
+{
+  "workload": "coawst",
+  "description": "COAWST 大气-海洋-海浪耦合",
+  "progress_line_regex": "STEP\\s+Day|Timing for main:|\\+time\\s+\\d{8}\\.\\d{6}",
+  "output_globs": ["*.nc", "wrfout_*", "wrfrst_*", "swan_rst.dat-*"],
+  "first_progress_sec": 1800,
+  "stall_sec": 1800,
+  "notes": "三个分量各写各的日志与产物；任一分量有进度即视为整体在推进"
+}

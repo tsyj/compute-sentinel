@@ -1,0 +1,9 @@
+{
+  "workload": "download",
+  "description": "大文件/数据集下载任务",
+  "progress_line_regex": "$^",
+  "output_globs": ["*.nc", "*.zip", "*.tar*", "*.grib*", "*.part"],
+  "first_progress_sec": 600,
+  "stall_sec": 900,
+  "notes": "日志通常完全静默，判定必须依赖产物 size 增长。progress_line_regex 故意设为永不匹配"
+}

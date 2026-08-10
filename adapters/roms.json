@@ -1,0 +1,9 @@
+{
+  "workload": "roms",
+  "description": "ROMS 区域海洋模式",
+  "progress_line_regex": "STEP\\s+Day|DEF_HIS|WRT_HIS",
+  "output_globs": ["*_his.nc", "*_rst.nc"],
+  "first_progress_sec": 1800,
+  "stall_sec": 1800,
+  "notes": "日志按 NTSAVG 间隔写，中间静默数分钟属正常"
+}

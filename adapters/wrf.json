@@ -1,0 +1,9 @@
+{
+  "workload": "wrf",
+  "description": "WRF 大气模式（含 COAWST 中的 ATM 分量）",
+  "progress_line_regex": "Timing for main:|d01\\s+\\d{4}-\\d{2}-\\d{2}",
+  "output_globs": ["wrfout_*", "wrfrst_*"],
+  "first_progress_sec": 1800,
+  "stall_sec": 1800,
+  "notes": "日志按 timestep 写；restart 文件按 restart_interval 写，两者节奏不同"
+}

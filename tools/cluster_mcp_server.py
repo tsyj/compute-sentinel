@@ -70,16 +70,33 @@ def audit(tool: str, args: dict, decision: str, reason: str = "") -> None:
 
 # ---------------------------------------------------------------- workload 适配
 
-ADAPTERS = {
-    # workload: (进度行正则, 产物 glob, 首个信号超时秒, 中途静止阈值秒)
-    "wrf":      (r"Timing for main:|d01\s+\d{4}-\d{2}-\d{2}", "wrfout_*|wrfrst_*", 1800, 1800),
-    "roms":     (r"STEP\s+Day|DEF_HIS|WRT_HIS",               "*_his.nc|*_rst.nc",  1800, 1800),
-    "coawst":   (r"STEP\s+Day|Timing for main:",              "*.nc|wrfout_*",      1800, 1800),
-    "mitgcm":   (r"time_tsnumber",                            "U\\.*.data",         1800, 1800),
-    "pytorch":  (r"\bep\b|epoch|loss=|step\s*\d+",            "*.pt|*.ckpt",        600,  900),
-    "download": (r"$^",                                       "*.nc|*.zip|*.tar*",  600,  900),
-    "generic":  (r".",                                        "*",                  900,  1200),
-}
+ADAPTER_DIR = Path(__file__).resolve().parent.parent / "adapters"
+_ADAPTER_CACHE: dict[str, dict] = {}
+
+_FALLBACK = dict(workload="generic", progress_line_regex=".", output_globs=["*"],
+                 first_progress_sec=900, stall_sec=1200,
+                 notes="适配器文件缺失，已回落到内置兜底值")
+
+
+def load_adapter(workload: str) -> dict:
+    """从 adapters/<workload>.json 加载。文件缺失时回落到兜底并显式标注。"""
+    if workload in _ADAPTER_CACHE:
+        return _ADAPTER_CACHE[workload]
+    f = ADAPTER_DIR / f"{workload}.json"
+    try:
+        ad = json.loads(f.read_text(encoding="utf-8"))
+        ad.setdefault("source", str(f.name))
+    except Exception:
+        ad = dict(_FALLBACK, source="fallback(内置)", requested=workload)
+    _ADAPTER_CACHE[workload] = ad
+    return ad
+
+
+def available_workloads() -> list[str]:
+    try:
+        return sorted(f.stem for f in ADAPTER_DIR.glob("*.json"))
+    except Exception:
+        return ["generic"]
 
 
 def _stat_many(run_dir: Path, patterns: str) -> list[dict]:
@@ -148,8 +165,11 @@ def t_probe_job_progress(run_dir: str, workload_type: str = "generic",
     全部静止且超过该 workload 阈值才 STALLED。采集失败降级 UNKNOWN，绝不误判 DEAD。
     """
     d = check_path(run_dir)
-    ad = ADAPTERS.get(workload_type, ADAPTERS["generic"])
-    prog_re, patterns, first_to, stall_to = ad
+    ad = load_adapter(workload_type)
+    prog_re = ad.get("progress_line_regex", ".")
+    patterns = "|".join(ad.get("output_globs", ["*"]))
+    first_to = int(ad.get("first_progress_sec", 900))
+    stall_to = int(ad.get("stall_sec", 1200))
     prev = prev_snapshot or {}
     sig, unavailable = {}, []
 
@@ -159,8 +179,26 @@ def t_probe_job_progress(run_dir: str, workload_type: str = "generic",
             lp = check_path(log_path)
             st = lp.stat()
             cur = dict(size=st.st_size, mtime=int(st.st_mtime))
-            grew = cur["size"] > prev.get("log", {}).get("size", -1)
-            sig["log"] = dict(changed=bool(grew), detail=f'size={cur["size"]}', **cur)
+            prev_size = prev.get("log", {}).get("size", -1)
+            grew = cur["size"] > prev_size
+            # 关键：日志"在长"不等于"有进度"。只统计新增片段里匹配进度行的条数，
+            # 一个反复刷同一行错误的作业，size 一直涨但进度行数为 0 —— 那不是 RUNNING。
+            prog_hits, tail_txt = 0, ""
+            if grew and prev_size >= 0:
+                with lp.open("rb") as fh:
+                    fh.seek(max(0, prev_size))
+                    tail_txt = fh.read(512 * 1024).decode("utf-8", "replace")
+                try:
+                    prog_hits = len(re.findall(prog_re, tail_txt, re.M))
+                except re.error:
+                    prog_hits = -1        # 正则无效，退化为只看 size
+            has_progress = (prog_hits != 0) if (grew and prev_size >= 0) else grew
+            sig["log"] = dict(changed=bool(has_progress), size=cur["size"], mtime=cur["mtime"],
+                              grew=bool(grew), progress_lines=prog_hits,
+                              detail=(f'size={cur["size"]}'
+                                      + (f", 新增 {len(tail_txt)}B 内含进度行 {prog_hits} 条"
+                                         if grew and prev_size >= 0 else "")
+                                      + (" ← 日志在长但无进度行" if grew and prog_hits == 0 else "")))
         else:
             unavailable.append("log")
             sig["log"] = dict(changed=None, detail="未提供 log_path")
@@ -218,7 +256,8 @@ def t_probe_job_progress(run_dir: str, workload_type: str = "generic",
         status = "STALLED" if stalled_for >= stall_to else "RUNNING"
         conf = 0.9 if status == "STALLED" else 0.5
 
-    return dict(status=status, workload_type=workload_type, signals=sig,
+    return dict(status=status, workload_type=workload_type,
+                adapter=ad.get("source", "?"), signals=sig,
                 confidence=conf, stalled_for_sec=stalled_for,
                 thresholds=dict(first_progress_sec=first_to, stall_sec=stall_to),
                 unavailable_signals=unavailable,
@@ -234,7 +273,7 @@ TOOLS = {
         "type": "object",
         "properties": {
             "run_dir": {"type": "string", "description": "作业运行目录"},
-            "workload_type": {"type": "string", "enum": list(ADAPTERS),
+            "workload_type": {"type": "string", "enum": available_workloads(),
                               "description": "workload 类型，决定进度判据与阈值"},
             "log_path": {"type": "string", "description": "日志文件路径（可选）"},
             "proc_pattern": {"type": "string", "description": "进程命令行匹配片段（可选）"},

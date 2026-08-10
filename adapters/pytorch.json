@@ -1,0 +1,15 @@
+{
+  "workload": "pytorch",
+  "description": "PyTorch 训练（单机或分布式）",
+  "progress_line_regex": "^ep\\s|epoch\\s*\\d+|loss[=:]|step\\s*\\d+|it/s",
+  "output_globs": ["*.pt", "*.ckpt", "*.safetensors"],
+  "first_progress_sec": 600,
+  "stall_sec": 900,
+  "gpu_signal": {
+    "required": true,
+    "idle_util_pct": 5,
+    "idle_timeout_sec": 1200,
+    "note": "预处理完成后 GPU util 应跳到 70%+。CPU 100% 而 GPU 持续 0% 是退化路径的典型特征"
+  },
+  "notes": "本 adapter 依据 CLAUDE.md 2.55 记录的真实事故编写，尚未在本项目中实测（见 evidence/README.md 的证据覆盖说明）"
+}

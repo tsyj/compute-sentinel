@@ -34,17 +34,25 @@ Prometheus 看不出来，日志告警也看不出来，因为**长时任务的�
 
 这件事单个 Agent 做不了：它同时需要多源采集、领域知识检索、风险分级、受控执行、结果校验、经验沉淀。这就是多 Agent 的必要性。
 
-## 适用范围
+## 适用范围（区分"已验证"与"设计覆盖"）
 
-同一套失败模式与恢复语义，覆盖：
+同一套失败模式与恢复语义，**设计上**覆盖下列场景。
+但证据强度差别很大，这里如实标注 —— 完整说明见 [`evidence/README.md`](evidence/README.md)：
 
-- 大模型预训练 / 微调（NCCL hang、loss spike、dataloader 死锁、掉卡）
-- 气象海洋业务化预报（WRF / ROMS / SWAN 耦合）
-- CAE / EDA 仿真（碰撞、流体、芯片验证）
-- 生信流程与大规模数据处理流水线
-- 科研 HPC 集群日常作业
+| 场景 | 状态 |
+|---|---|
+| 气象海洋耦合（WRF / ROMS / SWAN） | ✅ **已实测**，多份证据 |
+| 大模型预训练 / 微调 | ⚠️ **未实测**。适配器依据真实事故编写，未经验证 |
+| 数据下载 / 批处理流水线 | ⚠️ **未实测** |
+| CAE / EDA 仿真 | ❌ **仅结构相似性推断**，无证据 |
 
-换场景只需替换 **workload adapter**，Agent 与 Skill 不变。
+换场景只需替换 **workload adapter**（[`adapters/*.json`](adapters/)），Agent 与 Skill 不变 ——
+这个**结构**是可验证的（每次判定的返回里都带 `adapter` 字段标明用了哪份配置），
+但"换到训练场景后误报率如何"目前**没有数据**。
+
+> 上表第一行的那句"进程活着、CPU 100%、GPU 0%"确有其事，
+> 但发生在本项目立项之前，未保留可发布的原始产物，
+> **不作为本项目的实测证据**，只作为 `adapters/pytorch.json` 中 `gpu_signal` 判据的来源。
 
 ---
 
@@ -91,7 +99,8 @@ MCP / 适配器层（集群适配器 + 云产品 MCP，Mock 与真实共用 Sche
 docs/        架构、Agent Identity 清单、AgentTeams 映射
 agents/      六个 Agent 的声明式定义
 skills/      八个 Skill（SKILL.md 规范）
-adapters/    workload 适配器（WRF / ROMS / PyTorch / 下载任务 / generic）
+adapters/    workload 适配器配置（7 份 JSON，判定逻辑与领域知识分离的落点）
+tools/       可运行工具：config_precheck / cluster_mcp_server / collect_observability
 evidence/    真实故障日志与运行证据（脱敏后）
 ```
 
@@ -105,7 +114,6 @@ evidence/    真实故障日志与运行证据（脱敏后）
 | AgentTeams 部署与凭证隔离验证 | ✅ [证据案例 03](evidence/case-03-agentteams-deployment.md) |
 | `config-precheck` 可运行实现 + 实测 | ✅ [实测 01](evidence/measure-01-config-precheck.md)，四状态验证、真实配置零误报 |
 | 多 Agent 闭环实跑（Sentinel→Triage→Planner） | ✅ [实测 03](evidence/measure-03-agents-advanced-an-open-question.md) |
-| 可观测链路（Trace / Log / Metrics） | ⬜ 见 [`docs/roadmap.md`](docs/roadmap.md) |
 | MCP 等价集成契约 | ⬜ 同上 |
 | `progress-probe` 可运行原型 | ⬜ 同上 |
 | Executor 安全分级实证（L0–L3） | ⬜ 同上 |

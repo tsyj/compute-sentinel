@@ -1,0 +1,9 @@
+{
+  "workload": "mitgcm",
+  "description": "MITgcm",
+  "progress_line_regex": "time_tsnumber|cg2d_init_res",
+  "output_globs": ["U.*.data", "V.*.data", "T.*.data"],
+  "first_progress_sec": 1800,
+  "stall_sec": 1800,
+  "notes": "STDOUT.0000 里的 time_tsnumber 单调递增"
+}
