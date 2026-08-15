@@ -109,16 +109,17 @@ def main():
     logbytes = Path(a.log).read_bytes()
     ad = S.load_adapter(a.workload)
 
-    # 卡死真实发生的时刻：日志里最后一条进度行写下的时间
-    onset = None
+    # 卡死真实发生的时刻。优先取该行**日志自带的时间戳** ——
+    # 若退而求其次用"卡死后第一个采样点"，会把时延低估将近一个采样周期。
+    onset_sod, onset_src = None, ""
     if a.stall_from_line:
-        idx = logbytes.find(a.stall_from_line.encode())
-        if idx >= 0:
-            size_at = idx + len(a.stall_from_line.encode())
-            for r in records:
-                if r["log_size"] >= size_at:
-                    onset = r
-                    break
+        for ln in logbytes.decode("utf-8", "replace").splitlines():
+            if a.stall_from_line in ln:
+                m = re.match(r"\[(\d{2}):(\d{2}):(\d{2})\]", ln)
+                if m:
+                    h, mi, s = (int(x) for x in m.groups())
+                    onset_sod, onset_src = h * 3600 + mi * 60 + s, ln.strip()
+                break
 
     print(f"# 回放 {len(records)} 个快照 · workload={a.workload} · "
           f'stall_sec={ad.get("stall_sec")}s\n')
@@ -134,13 +135,21 @@ def main():
                   f'{str(r["gpu"])+"%":>5} {str(r["cpu"])+"%":>7} {r["ckpt"]:>5}  '
                   + ",".join(f"{k}={v}" for k, v in r["votes"].items()))
         if fs:
-            lat = f'{fs["ts"] - onset["ts"]:.0f}s' if onset else "—"
+            lat = "—"
+            if onset_sod is not None:
+                h, mi, s = (int(x) for x in fs["t"].split(":"))
+                d = h * 3600 + mi * 60 + s - onset_sod
+                lat = f"{d}s（{d/60:.1f} 分钟）"
             print(f'→ 首次判定 STALLED: {fs["t"]}，距退化开始 {lat}\n')
         else:
-            print(f"→ **全程未判定卡死（漏报）**\n")
+            span = "—"
+            if onset_sod is not None and rows:
+                h, mi, s = (int(x) for x in rows[-1]["t"].split(":"))
+                span = f"{h*3600+mi*60+s - onset_sod}s"
+            print(f"→ **全程未判定卡死（漏报）** —— 卡死已持续 {span}，判定始终为 RUNNING\n")
 
-    if onset:
-        print(f'退化路径开始（日志最后一条进度行）: {onset["t"]}')
+    if onset_src:
+        print(f"退化路径开始（日志最后一条进度行）: {onset_src}")
 
 
 if __name__ == "__main__":
