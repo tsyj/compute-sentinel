@@ -253,7 +253,7 @@ def decide(sig: dict, prev: dict, first_to: int, stall_to: int,
     status = "STALLED" if stalled_for >= eff_to else "RUNNING"
     conf = 0.9 if status == "STALLED" else 0.5
     if degraded:
-        conf = min(0.98, conf + 0.05)   # 有退化画像佐证，判定更有把握
+        conf = round(min(0.98, conf + 0.05), 2)   # 有退化画像佐证，判定更有把握
     if status == "RUNNING":
         note = (note + "；" if note else "") + \
                f"全部信号静止 {stalled_for}s，未达阈值 {eff_to}s，暂不判定卡死"
