@@ -122,7 +122,7 @@ CPU / GPU 占用只是**存活**。任一进展信号有变化即 `RUNNING`；
 
 `probe_job_progress` 的两轮判定实测：
 
-| 轮次 | 三信号 | 结果 |
+| 轮次 | 信号 | 结果 |
 |---|---|---|
 | 第 1 轮（无基线） | — | `UNKNOWN`，note：首轮采集，已建立基线 |
 | 第 2 轮（全静止 1800s） | log ✗ / file ✗ / resource ✗ | **`STALLED`**，confidence 0.9 |
