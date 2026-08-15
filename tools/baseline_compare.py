@@ -201,6 +201,13 @@ def main():
                     break
         evaluate(tag, obs, lb, ad_py, iv, True, True, onset)
 
+    # 负样本 · GPU 训练：真实成功跑完，但日志稀疏（20 分钟一行、30 分钟一个 ckpt）
+    sigN, logN = ev / "runN-signals.jsonl", ev / "runN-train.log"
+    if sigN.exists():
+        obs, lb, iv = load_gpu(sigN, logN)
+        evaluate("负样本 C · GPU 训练 150 分钟，真实成功跑完，但日志稀疏",
+                 obs, lb, ad_py, iv, True, False)
+
     COAWST = "/data/xinyuan/COAWST_Yagi_FNL_WRF3km_Sep05-08/coawst_run.log"
     DL = "/data/xinyuan/data/Global_Argo_download.log"
     if Path(COAWST).exists():
