@@ -79,9 +79,11 @@
 **Apache License 2.0 全量开源**：Agent 定义、Skill 规格、适配器配置、预检工具、
 MCP Server、证据与实测报告。
 
-上游贡献计划：适配器规范若通用则向 AgentTeams 提 PR；
-部署中发现的两个易用性问题（Worker 容器不继承 host-share 挂载、
-Matrix 房间纯文本 @ 不构成 mention）已可整理为 issue。
+上游贡献：部署与实跑中发现 **6 个问题**，已整理为可直接提交的 issue 正文
+（含最小复现、影响与建议改法），见 `docs/upstream-issues.md`。
+其中 1 条为 CLI 帮助文本泄露真实 API Key（按安全流程私下报告），
+另有 Worker 容器不继承 host-share 挂载、Matrix 纯文本 @ 不构成 mention 等。
+适配器规范若通用则另行提 PR。
 
 ## 业务价值与可复制性
 

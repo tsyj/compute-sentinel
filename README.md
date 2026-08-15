@@ -173,7 +173,7 @@ evidence/    真实故障日志与运行证据（脱敏后）
 | 本项目协议 | **Apache License 2.0**（与上游 AgentTeams 一致） |
 | 开放范围 | Agent 定义、Skill 规格、workload adapter 规范、预检工具、证据与实测报告**全部开放** |
 | 暂不开放 | 原始运行日志中包含他人作业信息与内网路径的部分（脱敏后再发布，见 `evidence/README.md`） |
-| 上游贡献计划 | `progress-probe` 的 adapter 规范若通用，向 AgentTeams 提 PR；<br>部署过程中发现的两个易用性问题（见下）已可整理为 issue |
+| 上游贡献 | 部署与实跑中发现 **6 个问题**，已整理为可直接提交的 issue 正文（含最小复现、影响与建议改法）：[`docs/upstream-issues.md`](docs/upstream-issues.md)。<br>其中 1 条为 **CLI 帮助文本泄露真实 API Key**，按安全问题流程私下报告；<br>`progress-probe` 的 adapter 规范若通用，另行提 PR |
 
 ### 第三方依赖
 
