@@ -67,8 +67,8 @@
 
 `probe_job_progress` 的 `status` 取值：`RUNNING` / `STALLED` / `DEAD` / `UNKNOWN`。
 
-**判定规则区分进展信号与存活信号**：日志进度行、产物文件是**进展**，
-CPU / GPU 占用只是**存活**。任一进展信号有变化即 `RUNNING`；
+**判定规则**：日志进度行与产物文件无条件算进展；CPU / GPU 占用**只在资源画像
+符合该 workload 预期时**才算进展。任一算数的信号有变化即 `RUNNING`；
 全部静止且累计时长超过该 workload 的 `stall_sec` 才 `STALLED`。
 
 对声明了 `gpu_signal.required` 的 workload，「CPU 忙 + GPU 闲」不计进展票，
