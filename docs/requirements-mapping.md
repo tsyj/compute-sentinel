@@ -149,10 +149,10 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 | 开源或开放的范围 | 全部：Agent 定义、Skill 规格、适配器、预检工具、MCP Server、证据与实测报告 |
 | 开源协议 | **Apache License 2.0** |
 | 第三方依赖 | AgentTeams v1.2.2（Apache-2.0）、Higress、Tuwunel/Element、MinIO、Docker。**自研工具零第三方依赖**（纯 Python 标准库） |
-| 商业 API 调用情况 | 阿里云百炼 Token Plan（OpenAI 兼容协议），默认模型 `qwen3.7-plus`。**费用假设与锁定风险**：套餐制；同套餐内已实测可用备选 5 个，切换成本为改一个环境变量 |
+| 商业 API 调用情况 | 阿里云百炼 Token Plan（OpenAI 兼容协议），默认模型 `qwen3.7-plus`。**费用假设与锁定风险**：套餐按周计配额且整体 2026-09-10 到期（决赛 9-22），[case-04](../evidence/case-04-quota-exhausted.md) 记录了一次真实的配额耗尽。**同套餐内换模型**仅改模型名（已实测 5 个备选可用）；**跨供应商切换**实测需协调修改 3 个 Higress 托管资源 + 容器重建，成本高于同套餐换模型 |
 | 闭源模型使用情况 | `qwen3.7-plus` 为闭源模型。**使用范围**：仅 Agent 的自然语言推理；**判定逻辑本身不调模型**（纯规则，可离线复现），因此闭源模型不影响核心结论的可复现性 |
 | 数据来源与授权边界 | 实测数据来自**本团队自己的科研运行**（气象海洋耦合模式、GPU 训练、数据集下载）。历史日志含主机路径，**未随仓库发布**，仓库内只有脱敏统计与复现命令 |
-| 可复现方式 | 三条命令复现全部判定类结论（`test_decide.py` / `replay_signals.py` / `replay_from_log.py`），**纯标准库、不需要 GPU、不调模型** |
+| 可复现方式 | **一条命令** `./verify.sh` 复现全部判定类结论（11 项断言，覆盖漏报与误报两侧），**纯标准库、不需要 GPU、不需要网络、不调模型、不读凭证** |
 | 部署依赖 | 见 [case-03](../evidence/case-03-agentteams-deployment.md)（含 Docker 镜像源、group 创建等实际踩坑） |
 | 后续维护计划 | 见 [roadmap.md](roadmap.md) |
 
