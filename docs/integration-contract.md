@@ -60,22 +60,28 @@
 
 | 工具 | 必填 | 可选 | 返回要点 |
 |---|---|---|---|
-| `probe_job_progress` | `run_dir` | `workload_type`、`log_path`、`proc_pattern`、`prev_snapshot`、`job_start_ts` | `status`、`signals{log,file,resource}`、`confidence`、`stalled_for_sec`、`thresholds`、`unavailable_signals`、`snapshot` |
+| `probe_job_progress` | `run_dir` | `workload_type`、`log_path`、`proc_pattern`、`prev_snapshot`、`job_start_ts`、`interval_sec` | `status`、`signals{log,file,resource,gpu}`、`confidence`、`stalled_for_sec`、`degradation_suspected`、`thresholds`、`unavailable_signals`、`snapshot` |
 | `tail_log` | `path` | `lines`（1–500） | `size`、`mtime`、`lines[]` |
 | `stat_outputs` | `run_dir` | `patterns`（glob，`\|` 分隔） | `count`、`newest_mtime`、`total_size`、`files[]` |
 | `sample_resources` | `pattern` | — | `matched`、`total_cpu_pct`、`procs[]` |
 
 `probe_job_progress` 的 `status` 取值：`RUNNING` / `STALLED` / `DEAD` / `UNKNOWN`。
 
-**判定规则是 OR 而非 AND**：三类信号任一有变化即 `RUNNING`；
+**判定规则区分进展信号与存活信号**：日志进度行、产物文件是**进展**，
+CPU / GPU 占用只是**存活**。任一进展信号有变化即 `RUNNING`；
 全部静止且累计时长超过该 workload 的 `stall_sec` 才 `STALLED`。
 
-两条边界规则（均已实测）：
+对声明了 `gpu_signal.required` 的 workload，「CPU 忙 + GPU 闲」不计进展票，
+并在返回里置 `degradation_suspected=true`。详见 `evidence/measure-06`。
+
+三条边界规则（均已实测）：
 
 - **首轮无基线时返回 `UNKNOWN` 而非 `RUNNING`**。单次采样无法判断"变化"，
   强行判 RUNNING 会让一开始就卡死的作业永远检不出来。
 - **提供 `job_start_ts` 时启用首个进度信号超时**：作业启动已久却零产物，
   首轮即可判 `STALLED`，无需等下一轮。
+- **`interval_sec` 由调用方给出真实轮询间隔**。不给则沿用上轮 snapshot、再缺省 300。
+  卡死计时按真实间隔累加，不使用固定常数。
 
 ### 2.4 错误处理
 
