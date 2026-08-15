@@ -59,7 +59,7 @@
 | `measure-05-observability.md` | 可观测 | Trace/Log/Metrics 三类；采出无沙箱执行问题 |
 | `measure-06-gpu-stall.md` | 实测证伪 | 4090 上真造 GPU 退化路径卡死；**旧判定逻辑全程漏报**，修复后 909s 发现 |
 | `measure-07-sampling-rate.md` | 对照实验 | 加密采样后 `gpu_ever_busy` 可观测，快速通道生效；采样周期必须细于最短工作相位 |
-| `measure-08-false-positive-and-perf.md` | 误报与性能 | **误报 0 次 / 38.1 小时真实成功运行**；ps 扇出优化后 100 作业巡检 11s→0.19s |
+| `measure-08-false-positive-and-perf.md` | 误报与性能 | **误报 0 次 / 38.1 小时真实成功运行**（累计 40.6 小时见 measure-09）；ps 扇出优化后 100 作业巡检 11s→0.19s |
 | `measure-09-baseline.md` | **基线对照** | 六种判据 × 五个真实数据集；**只有本方案全对**。心跳/CPU 两次卡死全漏；只看日志在真实训练上误报 190 次 |
 | `gpu-stall/` | 原始数据 | 信号快照序列、训练日志、回放输出、复现脚本 |
 | `perf/` | 原始数据 | 误报-阈值二维扫描输出、性能 benchmark 输出 |

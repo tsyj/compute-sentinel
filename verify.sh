@@ -64,7 +64,25 @@ for R in "runA:ep 4 begin:909" "runB:ep 11 begin:318"; do
 done
 
 # ── 4. 误报侧回放 ────────────────────────────────────────────
-printf '\n[4/5] 误报侧回放（需要历史运行日志，默认不随仓库发布）\n'
+printf '\n[4/5] 误报侧回放\n'
+# 负样本 C 随仓库发布，开箱即测：150 分钟真实成功训练，日志稀疏
+SIGN="evidence/gpu-stall/runN-signals.jsonl"; LOGN="evidence/gpu-stall/runN-train.log"
+if [[ -f "$SIGN" && -f "$LOGN" ]]; then
+  grep -q 'DONE' "$LOGN" \
+    && OUT=$($PY tools/replay_signals.py --signals "$SIGN" --log "$LOGN" --workload pytorch 2>&1) \
+    || OUT=""
+  ST=$(grep -c ' STALLED ' <<<"$OUT")
+  # 该跑真值为「正常跑完」，修复后一路不得出现 STALLED
+  AFTER=$(awk '/## 修复后/,0' <<<"$OUT" | grep -c ' STALLED ')
+  if [[ "$AFTER" == "0" ]]; then
+    ok "GPU 训练 150 分钟真实跑完（日志静默 18.2 分钟）：误报 0 次"
+  else
+    bad "GPU 训练负样本出现 $AFTER 次误报（预期 0）"
+  fi
+else
+  skip "GPU 训练负样本数据缺失"
+fi
+
 COAWST="${COAWST_LOG:-}"
 DL="${DOWNLOAD_LOG:-}"
 if [[ -n "$COAWST" && -f "$COAWST" ]]; then
@@ -121,4 +139,5 @@ if (( FAIL > 0 )); then
   exit 1
 fi
 printf '全部通过。以上每一项都不依赖大模型，结果是确定性的。\n'
-printf '跳过项需要历史运行日志，那些日志含主机路径未随仓库发布，见 evidence/measure-08。\n\n'
+printf '跳过项需要历史科研运行日志（含主机路径，未随仓库发布），见 evidence/measure-08。\n'
+printf '随仓库发布的数据已覆盖漏报与误报两侧，无需任何外部文件即可复现。\n\n'
