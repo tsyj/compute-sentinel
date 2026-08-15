@@ -10,9 +10,9 @@
 
 | 要求 | 状态 | 我们的落地与证据 |
 |---|---|---|
-| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 3 个**（Sentinel→Triage→Planner），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md) |
+| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 4 个**（Sentinel→Triage→Planner→Executor），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md) |
 | 每个 Agent 有清晰身份定义 | ✅ | [`docs/agent-identity.md`](agent-identity.md)，按附录 A 八字段 |
-| 通过协作完成端到端闭环 | ⚠️ | 发现→诊断→规划走通并留有完整对话记录；**执行→验证→沉淀三段未实跑** |
+| 通过协作完成端到端闭环 | ⚠️ | 发现→诊断→规划→**执行**走通并留有完整记录；**验证→沉淀两段未实跑** |
 | **必须以 AgentTeams 作为协同设计基点** | ✅ | AgentTeams v1.2.2 实际部署（6 容器），Worker CRD 见 [`agents/*.worker.yaml`](../agents/)，部署验证见 [case-03](../evidence/case-03-agentteams-deployment.md) |
 | 说明角色编排如何映射到框架能力 | ✅ | Manager-Workers 模型；角色=Worker CRD，编排=Matrix 房间 mention，上下文=共享文件系统，状态追踪=Matrix 会话 + governance/audit.db |
 
@@ -36,7 +36,7 @@
 | 4 | 工具调用 | ✅ | Skill + 自研 `cluster-mcp-server`（MCP over stdio，4 只读工具），[契约](integration-contract.md) |
 | 5 | 结果验证 | ❌ | Verifier 未实跑 |
 | 6 | 执行证据沉淀 | ✅ | 审计库 56 span + 完整对话记录 + 判定回放输出，全部入库 |
-| 7 | 审批与回滚 | ❌ | L0–L3 分级已设计，**Executor 未实跑**，审批与回滚未验证 |
+| 7 | 审批与回滚 | ✅ | **已实证**（[measure-10](../evidence/measure-10-l2-approval.md)）：Executor 在 L2 审批点停住 18 分 39 秒，一个字节未改；真人批准后执行、重跑预检验证、给出可执行的回滚命令。回滚点 MD5 与动手前原文件一致 |
 | 8 | 经验沉淀 | ⚠️ | 复盘写回 Runbook 的机制已设计；实跑中人工复核**拦下了 Agent 一个错误机制**，验证了"知识入库需人工 review"这条边界（[measure-04](../evidence/measure-04-human-review-caught-a-wrong-mechanism.md)），但 Curator 本身未跑 |
 
 **第 5、7 步是本方案当前最大的缺口，不掩饰。**
@@ -162,7 +162,7 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 |---|---|
 | 至少 3 个不同职能 Agent | ✅ 设计 6，实跑 3 |
 | Skill 为必选项 | ✅ 8 个 |
-| **高风险动作必须保留审批、回滚与审计边界** | ⚠️ **已设计未实证**。L0–L3 分级、审批点、回滚点均已写入 Skill 与 Agent 定义，审计链已跑通；但 **Executor 未实跑，审批与回滚未验证** |
+| **高风险动作必须保留审批、回滚与审计边界** | ✅ **已实证**（[measure-10](../evidence/measure-10-l2-approval.md)）。L2 动作在审批点真的停住；回滚点可核对；执行后自验证。⚠️ 仍未实测：L3 拒绝执行、重启作业/断点续跑两类 L2 动作 |
 | 未使用 MCP 时需给等价集成契约 | ✅ 已用 MCP，且契约文档一并提供 |
 
 ---
@@ -172,5 +172,5 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 **做到了**：AgentTeams 实跑、8 个 Skill、MCP Server 与安全边界实测、可观测采集并采出真问题、
 判定逻辑的漏报与误报双侧实测、RAG 四项达成 2 项。
 
-**没做到**：Executor / Verifier / Curator 三个 Agent 未实跑，因此**闭环八步的第 5、7 步无实证**；
+**没做到**：Verifier / Curator 两个 Agent 未实跑，因此**闭环八步的第 5 步（结果验证）无实证**；
 Token 消耗与 TTFT 未采；可观测未做 OTel 语义映射，也未接时序/向量后端。
