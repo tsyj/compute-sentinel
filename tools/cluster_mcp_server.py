@@ -240,7 +240,9 @@ def decide(sig: dict, prev: dict, first_to: int, stall_to: int,
         return out("UNKNOWN", 0.0, stalled_for, "全部信号不可采集")
 
     if any(votes):
-        return out("RUNNING", round(0.6 + 0.2 * sum(votes), 2), 0, note)
+        # 每多一个独立信号佐证就加一点，但封顶 0.95 —— 判定永远不宣称确定。
+        # （原式 0.6+0.2×票数 在三票时算出 1.2，置信度越界。）
+        return out("RUNNING", round(min(0.95, 0.6 + 0.1 * sum(votes)), 2), 0, note)
 
     stalled_for += int(interval_sec)
     # 退化画像 + GPU 曾经忙过 ⇒ 预处理已结束，可用更短阈值

@@ -77,7 +77,14 @@ print("\n── T6 真实轮询间隔被采纳（原实现写死 300s，20s 轮�
 check("20s×3 轮累计 60s", drive(3, degen, True, dict(warm), iv=20)["stalled_for_sec"], 60)
 check("20s×3 轮不告警", drive(3, degen, True, dict(warm), iv=20)["status"], "RUNNING")
 
-print("\n── T7 全部信号不可采 ⇒ UNKNOWN，绝不误判 ──")
+print("\n── T7 置信度封顶：任何票数组合都不得超过 1 ──")
+for n, sg in (("1票", sig(log=True)), ("2票", sig(log=True, file=True)),
+              ("3票", sig(log=True, file=True, cpu=True)),
+              ("4票", sig(log=True, file=True, cpu=True, gpu=True))):
+    c = drive(2, sg, True, dict(warm))["confidence"]
+    check(f"{n} 置信 ≤0.95", c <= 0.95, True)
+
+print("\n── T8 全部信号不可采 ⇒ UNKNOWN，绝不误判 ──")
 allnone = {"log": dict(changed=None), "file": dict(changed=None), "resource": dict(changed=None)}
 check("全不可采 UNKNOWN", decide(allnone, dict(warm), 600, STALL, 0, 20, True, DEG)["status"], "UNKNOWN")
 
