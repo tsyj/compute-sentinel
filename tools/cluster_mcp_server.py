@@ -135,15 +135,40 @@ def t_stat_outputs(run_dir: str, patterns: str = "*") -> dict:
                 total_size=sum(f["size"] for f in files), files=files[:50])
 
 
-def t_sample_resources(pattern: str) -> dict:
-    """按命令行片段匹配进程，返回 CPU/内存/线程。只读，不发送任何信号。"""
-    if not re.fullmatch(r"[\w./=-]{1,120}", pattern or ""):
-        raise ToolError("BAD_PATTERN", "匹配串只允许字母数字与 . / _ - = 字符")
+_PS_CACHE: tuple[float, str] | None = None
+PS_TTL = 2.0          # 秒。同一轮巡检里多个作业共用一次扫描
+
+
+def _ps_snapshot() -> str:
+    """
+    全机进程表快照，带 TTL 缓存。
+
+    `ps -eo` 扫全机进程要 ~120 ms，比其余三个工具慢两个数量级。
+    原来每判定一个作业就扫一次 —— 盯 N 个作业就是每轮 N 次全机扫描，
+    这是整套判定里唯一随作业数线性劣化的地方。同一轮巡检内进程表几乎不变，
+    因此缓存 2 秒、让同轮的所有作业共用一次扫描。
+
+    TTL 取 2 秒而不是更长：巡检周期是分钟级，2 秒足够覆盖一轮扇出，
+    又不会让两轮之间读到陈旧数据。
+    """
+    global _PS_CACHE
+    now = time.monotonic()
+    if _PS_CACHE and now - _PS_CACHE[0] < PS_TTL:
+        return _PS_CACHE[1]
     try:
         out = subprocess.run(["ps", "-eo", "user,pid,pgid,pcpu,rss,nlwp,args"],
                              capture_output=True, text=True, timeout=20).stdout
     except Exception as e:
         raise ToolError("PS_FAILED", str(e)[:120])
+    _PS_CACHE = (now, out)
+    return out
+
+
+def t_sample_resources(pattern: str) -> dict:
+    """按命令行片段匹配进程，返回 CPU/内存/线程。只读，不发送任何信号。"""
+    if not re.fullmatch(r"[\w./=-]{1,120}", pattern or ""):
+        raise ToolError("BAD_PATTERN", "匹配串只允许字母数字与 . / _ - = 字符")
+    out = _ps_snapshot()
     procs = []
     for line in out.splitlines()[1:]:
         if pattern in line:

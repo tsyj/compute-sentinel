@@ -45,13 +45,15 @@ Prometheus 看不出来，日志告警也看不出来，因为**长时任务的�
 |---|---|
 | 气象海洋耦合（WRF / ROMS / SWAN） | ✅ **已实测**，多份证据 |
 | 大模型预训练 / 微调 | ✅ **已实测**（RTX 4090，[measure-06](evidence/measure-06-gpu-stall.md)）。实测**证伪**了原判据：旧逻辑对该场景全程漏报 |
-| 数据下载 / 批处理流水线 | ⚠️ **未实测** |
+| 数据下载 / 批处理流水线 | ✅ **误报侧已实测**（18 GB / 4.29h 真实下载，误报 0 次，[measure-08](evidence/measure-08-false-positive-and-perf.md)）。批处理仍未实测 |
 | CAE / EDA 仿真 | ❌ **仅结构相似性推断**，无证据 |
 
 换场景只需替换 **workload adapter**（[`adapters/*.json`](adapters/)），Agent 与 Skill 不变 ——
 这个**结构**是可验证的（每次判定的返回里都带 `adapter` 字段标明用了哪份配置），
-训练场景的**漏报**现在有数据了（measure-06：修复前全程漏报，修复后 909 秒发现），
-但"在真实生产训练作业上长期跑的**误报**率如何"仍然**没有数据**。
+漏报与误报现在两侧都有数据：漏报见 [measure-06/07](evidence/measure-06-gpu-stall.md)，
+误报见 [measure-08](evidence/measure-08-false-positive-and-perf.md) ——
+**38.1 小时真实成功运行，当前阈值下误报 0 次**。
+仍缺的是 **GPU 训练场景的误报率**（现有误报样本都是 CPU 型 workload）。
 
 > 痛点表里那句"进程活着、CPU 100%、GPU 0%"最初来自一次立项之前的事故，
 > 当时未保留可发布产物。2026-08-15 我们在 RTX 4090 上**重新构造了同构的退化路径卡死**

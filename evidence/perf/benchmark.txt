@@ -1,0 +1,14 @@
+## 单次工具调用开销（每项 20 次取中位/P90）
+
+probe_job_progress 单次判定              中位     0.33 ms   P90     0.35 ms
+stat_outputs (1.8 GB 目录)             中位     0.27 ms   P90     0.29 ms
+tail_log                             中位     0.06 ms   P90     0.07 ms
+sample_resources (全机 ps 扫描)          中位   108.14 ms   P90   117.86 ms
+
+## 一轮巡检 N 个作业的总耗时 —— ps 扇出优化前后
+
+   作业数 N          优化前          优化后       加速
+       1        108 ms        108 ms     1.0×
+      10       1093 ms        116 ms     9.4×
+      50       5538 ms        147 ms    37.8×
+     100      11005 ms        189 ms    58.1×
