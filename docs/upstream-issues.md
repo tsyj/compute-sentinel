@@ -181,9 +181,39 @@ $ docker exec mycontainer wc -c /tmp/namelist.input
 
 ---
 
+## 7. Worker 把上游 429（配额耗尽）吞成 `Internal error`
+
+**严重程度：中（可诊断性）**
+
+### 复现
+
+模型供应商配额耗尽时，网关正确返回：
+
+```
+HTTP 429
+{"error":{"message":"Your token-plan 1-week quota has been exhausted.
+  The quota will reset at <时刻>.","type":"insufficient_quota"}}
+```
+
+但 Worker 在协作房间里只回一句 `Internal error`。
+
+### 影响
+
+配额耗尽是**可恢复、且上游已给出明确恢复时刻**的状态，却被压成了一句无信息量的
+内部错误。此时 `docker ps` 全部 `Up`、`agt get workers` 全部 `Running`、
+`docker logs` 没有任何错误栈 —— 三层检查全绿，但系统一件事也做不成。
+我们实际排查耗时约 15 分钟，其中 12 分钟浪费在这三层上。
+
+### 建议
+
+对上游 4xx 做分类透传，至少把 `insufficient_quota` 与恢复时刻原样呈现给用户，
+与真正的内部错误区分开。
+
+---
+
 ## 提交计划
 
-上述 1–5 条向 AgentTeams 仓库提 issue，第 1 条因涉及凭证泄露，
+上述 1–5、7 条向 AgentTeams 仓库提 issue，第 1 条因涉及凭证泄露，
 按安全问题流程私下报告而非公开 issue。
 第 6 条作为部署注意事项，同时写入本项目的部署说明。
 

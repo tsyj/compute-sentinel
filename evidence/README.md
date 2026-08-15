@@ -50,6 +50,7 @@
 | `case-01-wrf-restart-alarm.md` | 事故取证 | 一夜三次失败；问题在反馈时延而非诊断能力 |
 | `case-02-kill-by-name-is-broken.md` | 结构性缺陷 | `ps` comm 截断导致同名 binary 无法区分，可当场复现 |
 | `case-03-agentteams-deployment.md` | 部署验证 | 凭证隔离的 401/200 对照实验 |
+| `case-04-quota-exhausted.md` | 真实故障 | 配额耗尽：容器全 Up、编排全 Running、日志无错误栈，但系统一件事做不成——发生在我们自己的 Agent 系统上 |
 | `measure-01-config-precheck.md` | 工具实测 | 四个配置状态，真实配置零误报 |
 | `measure-02-agent-refuses-to-guess.md` | 行为验证 | 证据不可达时 Agent 拒绝编造 |
 | `measure-03-agents-advanced-an-open-question.md` | 闭环实测 | 三 Agent 协作推进了一个真实悬案 |
