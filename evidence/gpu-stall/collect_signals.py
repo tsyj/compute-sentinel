@@ -26,8 +26,12 @@ def gpu_stats():
     except Exception:
         return -1, -1
 
-def find_procs(match):
-    """返回 [(pid, kernel+user 时间(100ns), rss)]，按 CommandLine 子串匹配。"""
+def find_procs(match, self_pid):
+    """返回 [(pid, kernel+user 时间(100ns), rss)]，按 CommandLine 子串匹配。
+
+    必须排除采集器自身 —— 它的命令行里带着 --procmatch <match>，
+    会把自己也匹配进去，导致 CPU 读数混入采集器、且目标退出后 alive 仍为真。
+    """
     out = _ps("Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
               "Select-Object ProcessId,KernelModeTime,UserModeTime,WorkingSetSize,CommandLine | "
               "ConvertTo-Json -Compress")
@@ -40,8 +44,11 @@ def find_procs(match):
     res = []
     for p in data:
         cl = p.get("CommandLine") or ""
+        pid = int(p["ProcessId"])
+        if pid == self_pid or "collect_signals" in cl:
+            continue
         if match in cl:
-            res.append((int(p["ProcessId"]),
+            res.append((pid,
                         int(p.get("KernelModeTime") or 0) + int(p.get("UserModeTime") or 0),
                         int(p.get("WorkingSetSize") or 0)))
     return res
@@ -56,10 +63,11 @@ def main():
     a = ap.parse_args()
 
     logp = os.path.join(a.rundir, "train.log")
+    self_pid = os.getpid()
     prev, gone = None, 0
     with open(a.out, "a", encoding="utf-8") as f:
         while True:
-            procs = find_procs(a.procmatch)
+            procs = find_procs(a.procmatch, self_pid)
             alive = len(procs) > 0
             cputime = sum(p[1] for p in procs)
             rss = sum(p[2] for p in procs)

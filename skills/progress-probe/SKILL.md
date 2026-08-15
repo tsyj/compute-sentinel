@@ -1,12 +1,12 @@
 ---
 name: progress-probe
 description: |
-  判定一个长时计算任务"到底有没有在推进"。跨日志尾部、输出文件 mtime/size、CPU/GPU/IO 占用三类信号做联合推理，输出 RUNNING / STALLED / DEAD / UNKNOWN 与置信度。适用于数值模式（WRF、ROMS、SWAN、MITgcm）、深度学习训练、大规模数据下载与多阶段批处理流水线。核心规则是 OR 而非 AND：任一信号有变化即判定在推进，全部静止且超过该 workload 阈值才判卡死。
+  判定一个长时计算任务"到底有没有在推进"。跨日志尾部、输出文件 mtime/size、CPU 占用、GPU 利用率四类信号做联合推理，输出 RUNNING / STALLED / DEAD / UNKNOWN 与置信度。适用于数值模式（WRF、ROMS、SWAN、MITgcm）、深度学习训练、大规模数据下载与多阶段批处理流水线。核心规则是区分**进展信号**（日志进度行、产物文件）与**存活信号**（CPU/GPU 占用）：只有进展信号才能证明在推进，资源被占着不等于任务在往前走。
   Triggers: "作业卡住了吗", "还在跑吗", "进度", "stalled", "hang", "卡死", "没动静", "日志不动", "GPU 0%", "进程活着但", "long-running job health", "progress check", "巡检"。
 metadata:
-  status: design            # design | prototype | stable
+  status: prototype         # design | prototype | stable（0.2.0 起有实测回放数据）
   risk_level: L0            # 纯只读
-  version: 0.1.0
+  version: 0.2.0
 ---
 
 # ProgressProbe
@@ -23,16 +23,33 @@ metadata:
 
 ## 判定规则
 
-采集三类信号，**任一变化即判定 RUNNING**（OR，不是 AND）：
+### 进展信号与存活信号必须分开
 
-| 信号 | 采集方式 | 说明 |
-|---|---|---|
-| A · 日志 | 日志文件 size 增长，或尾部出现新的进度行 | 进度行的正则由 adapter 提供 |
-| B · 输出文件 | 主输出文件的 `mtime` 或 `size` 变化 | 数值模式的 history / restart 文件；训练的 checkpoint |
-| C · 资源 | 该作业进程的 CPU%、GPU util、磁盘写入速率 | GPU 类作业单独看 GPU util |
+> 这一条是 2026-08-15 实测**推翻原设计**后改的，详见 [measure-06](../../evidence/measure-06-gpu-stall.md)。
+> 原规则是三类信号对等 OR，结果在 GPU 退化路径上**全程漏报** ——
+> 因为那种故障里 CPU 恰恰是打满的。
 
-**全部三类信号在连续 N 轮内都静止**，且累计静止时长超过该 workload 的 `stall_threshold`，
-才判定 `STALLED`。
+| 类别 | 信号 | 采集方式 | 能证明什么 |
+|---|---|---|---|
+| **进展** | A · 日志 | 日志新增片段里匹配到 adapter 的进度行 | 任务在往前走 |
+| **进展** | B · 输出文件 | 主输出文件的 `mtime` 或 `size` 变化 | 任务在往前走 |
+| 存活 | C · CPU | 作业进程的 CPU% | 只能区分"卡住"与"死了" |
+| 存活 | D · GPU | `nvidia-smi` 利用率（adapter 声明 `gpu_signal.required` 时才采） | 同上 |
+
+**只有进展信号能投 RUNNING。** 存活信号的作用是：
+
+1. 防止把"卡住"误判成 `DEAD`；
+2. 对 GPU 型 workload，**「CPU 忙 + GPU 闲」是退化路径的正面指征** ——
+   此时 CPU 不计进展票，并置 `degradation_suspected`。
+
+对纯 CPU workload（ROMS / WRF / MITgcm）行为不变：CPU 忙仍算进展票，
+因为它们的资源画像本就该是 CPU 忙。这条由 `tools/test_decide.py` 的 T3/T4 防回归护栏钉住。
+
+**日志"在长"不等于"有进度"**：只统计新增片段里匹配进度行的条数。
+一个疯狂刷同一行错误的作业，size 一直涨但进度行为零 —— 那不是 RUNNING。
+
+**全部进展信号在连续 N 轮内都静止**，且累计静止时长超过该 workload 的阈值，
+才判定 `STALLED`。累计用的是**调用方给出的真实轮询间隔**，不是写死的常数。
 
 进程已不存在则判定 `DEAD`，交由 `crash-triage` 归类。
 
@@ -44,11 +61,21 @@ metadata:
 
 | workload | 首个进度信号超时 | 中途静止阈值 | 备注 |
 |---|---|---|---|
-| 深度学习训练 | 10 min | 15 min | 预处理阶段完成后 GPU util 应跳到 70%+ |
+| 深度学习训练 | 10 min | 15 min | 另有 **5 min 快速通道**，见下 |
 | 数值模式（ROMS / COAWST / WRF） | 30 min | 30 min | warm-up 长；日志按输出间隔写，静默正常 |
 | 预处理（metgrid / real） | 10 min | 10 min | 应快速产出中间文件 |
 | 数据下载 | 10 min | 15 min | 日志通常静默，**主要看文件 size 增长** |
 | generic | 15 min | 20 min | 兜底 |
+
+### 快速通道 `degraded_stall_sec`
+
+GPU 型 workload 上，若出现「CPU 打满 + GPU 闲置」的退化画像，可用更短的阈值（默认 5 min）。
+
+**但它有一个强制前置条件：本次运行中 GPU 必须曾经忙过（`gpu_ever_busy == True`）。**
+数据预处理阶段 CPU 忙、GPU 闲是完全正常的，没有这个前提，短阈值会把预处理打成卡死。
+
+`gpu_ever_busy` 只做**单向置位，绝不复位** —— GPU 利用率是脉冲式的，
+"最近几次没采到"不代表预处理又开始了。
 
 ## 输入
 
@@ -145,6 +172,16 @@ Sentinel Agent 的主 Skill。输出 `STALLED` 或 `DEAD` 时，Sentinel 不自�
 **阈值不是代码**：per-workload 阈值放在 adapter 配置里，调阈值走配置变更流程，
 不需要动 Skill 版本 —— 这是刻意的设计，因为阈值一定会在接入新集群时反复调整。
 
+### 已发生的版本变更
+
+| 版本 | 日期 | 变更 | 触发原因 |
+|---|---|---|---|
+| 0.1.0 | 2026-08 初 | 首版：三信号对等 OR | 依据真实事故设计 |
+| **0.2.0** | 2026-08-15 | **进展信号与存活信号分层**；接入 GPU 信号；新增 `degraded_stall_sec` 快速通道（带 `gpu_ever_busy` 前置条件）；修正轮询间隔与置信度上界 | **实测证伪**：GPU 退化路径上旧规则全程漏报（[measure-06](../../evidence/measure-06-gpu-stall.md)） |
+
+0.2.0 属于 minor 而非 major：`status` / `signals` / `confidence` 三个字段的契约未变，
+下游 Agent 不需要改。新增的 `degradation_suspected` 是可选字段。
+
 ## 能力评估
 
 这个 Skill 的评估**必须用真实历史运行数据回放**，不能用合成数据 —— 因为它要区分的
@@ -175,7 +212,27 @@ Sentinel Agent 的主 Skill。输出 `STALLED` 或 `DEAD` 时，Sentinel 不自�
 以**规则回放**为主：把标注好的快照序列喂进去，比对输出与真值。
 判定逻辑是确定性的（信号比对 + 阈值），因此评估结果可复现，不依赖模型采样。
 
-回归测试固化为评估集，每次 PR 必跑；误报率变差即阻断合并。
+回放工具 `tools/replay_signals.py` 调用的是 `cluster_mcp_server.decide()` ——
+**线上那一份判定逻辑本身**，不是为评估另写一份，因此评估结论不会与线上实现漂移。
 
-**已知局限**：评估集目前来自单一集群与单一团队的作业，
-对其他机构的 workload 分布是否成立，需要接入后重新标注。这一点不隐瞒。
+回归测试固化为 `tools/test_decide.py`（17 项，纯标准库），每次 PR 必跑。
+
+### 已跑过的评估（2026-08-15）
+
+| 数据集 | 规模 | 结果 |
+|---|---|---|
+| GPU 退化路径 · 20s 采样（[measure-06](../../evidence/measure-06-gpu-stall.md)） | 65 个真实快照 | 0.1.0 **全程漏报**；0.2.0 漏报时延 **909s** |
+| GPU 退化路径 · 10s 采样（[measure-07](../../evidence/measure-07-sampling-rate.md)） | 45 个真实快照 | 0.1.0 **全程漏报**；0.2.0 漏报时延 **318s** |
+| 语义单测 | 17 项 | 全通过，含纯 CPU workload 与预处理阶段的防误报护栏 |
+
+**采样准则**（由 measure-07 得出，接新集群时必须核对）：
+采样周期必须细于该 workload 的**最短工作相位**，否则整个相位可能被跳过 ——
+measure-06 里 20 秒采样完全漏掉了 16 秒的 GPU 工作相位，导致快速通道无法启用。
+GPU 训练建议 ≤ 10 秒。
+
+**已知局限**（不隐瞒）：
+
+- **误报率仍无数据。** 上表两条都是漏报侧的测量。压制误报是本 Skill 的首要目标，
+  但那需要真实生产作业的长期正常静默样本，目前没有。
+- 评估集来自单一集群、单一团队，且两次 GPU 实验都是**构造的复现**而非生产事故现场。
+- 单卡。多卡下"部分 rank 卡住"这一情形**当前判据覆盖不到**，需要 per-rank 采集。
