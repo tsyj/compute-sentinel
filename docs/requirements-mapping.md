@@ -10,9 +10,9 @@
 
 | 要求 | 状态 | 我们的落地与证据 |
 |---|---|---|
-| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 4 个**（Sentinel→Triage→Planner→Executor），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md) |
+| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 5 个**（Sentinel→Triage→Planner→Executor→Verifier），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md) |
 | 每个 Agent 有清晰身份定义 | ✅ | [`docs/agent-identity.md`](agent-identity.md)，按附录 A 八字段 |
-| 通过协作完成端到端闭环 | ⚠️ | 发现→诊断→规划→**执行**走通并留有完整记录；**验证→沉淀两段未实跑** |
+| 通过协作完成端到端闭环 | ⚠️ | 发现→诊断→规划→执行→**验证**走通并留有完整记录；**仅剩沉淀一段未实跑** |
 | **必须以 AgentTeams 作为协同设计基点** | ✅ | AgentTeams v1.2.2 实际部署（6 容器），Worker CRD 见 [`agents/*.worker.yaml`](../agents/)，部署验证见 [case-03](../evidence/case-03-agentteams-deployment.md) |
 | 说明角色编排如何映射到框架能力 | ✅ | Manager-Workers 模型；角色=Worker CRD，编排=Matrix 房间 mention，上下文=共享文件系统，状态追踪=Matrix 会话 + governance/audit.db |
 
@@ -34,7 +34,7 @@
 | 2 | 任务拆解 | ⚠️ | 实跑用的是 Matrix mention 触发，**Manager 的 taskflow 派单未真正使用** |
 | 3 | 上下文传递 | ✅ | 共享文件系统 `shared/knowledge/`；实跑中 Triage 读到了 Sentinel 落盘的材料 |
 | 4 | 工具调用 | ✅ | Skill + 自研 `cluster-mcp-server`（MCP over stdio，4 只读工具），[契约](integration-contract.md) |
-| 5 | 结果验证 | ❌ | Verifier 未实跑 |
+| 5 | 结果验证 | ✅ | **已实跑**（[measure-11](../evidence/measure-11-verifier.md)）：Verifier（L0 只读）独立走六项清单，不采信 Executor 自述。阳性对照判通过，**阴性对照判 FAIL 并戳穿了自述里的假数字**。⚠️ 人工复核发现它在阳性那次结论对但机制说错 |
 | 6 | 执行证据沉淀 | ✅ | 审计库 56 span + 完整对话记录 + 判定回放输出，全部入库 |
 | 7 | 审批与回滚 | ✅ | **已实证**（[measure-10](../evidence/measure-10-l2-approval.md)）：Executor 在 L2 审批点停住 18 分 39 秒，一个字节未改；真人批准后执行、重跑预检验证、给出可执行的回滚命令。回滚点 MD5 与动手前原文件一致 |
 | 8 | 经验沉淀 | ⚠️ | 复盘写回 Runbook 的机制已设计；实跑中人工复核**拦下了 Agent 一个错误机制**，验证了"知识入库需人工 review"这条边界（[measure-04](../evidence/measure-04-human-review-caught-a-wrong-mechanism.md)），但 Curator 本身未跑 |
@@ -172,5 +172,5 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 **做到了**：AgentTeams 实跑、8 个 Skill、MCP Server 与安全边界实测、可观测采集并采出真问题、
 判定逻辑的漏报与误报双侧实测、RAG 四项达成 2 项。
 
-**没做到**：Verifier / Curator 两个 Agent 未实跑，因此**闭环八步的第 5 步（结果验证）无实证**；
+**没做到**：Curator 未实跑，**闭环八步第 8 步（经验沉淀）仍无实证**；
 Token 消耗与 TTFT 未采；可观测未做 OTel 语义映射，也未接时序/向量后端。
