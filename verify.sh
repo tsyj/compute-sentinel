@@ -23,7 +23,7 @@ printf 'Python: %s\n' "$($PY -V 2>&1)"
 line
 
 # ── 1. 判定内核语义单测 ───────────────────────────────────────
-printf '\n[1/5] 判定内核语义单测（tools/test_decide.py）\n'
+printf '\n[1/6] 判定内核语义单测（tools/test_decide.py）\n'
 if OUT=$($PY tools/test_decide.py 2>&1); then
   N=$(printf '%s' "$OUT" | grep -c '^PASS')
   ok "$N 项断言全部通过"
@@ -32,8 +32,19 @@ else
   bad "单测未通过"; printf '%s\n' "$OUT" | tail -12
 fi
 
+# ── 1b. safe-kill 对抗测试 ──────────────────────────────────
+printf '\n[1b] safe-kill 对抗测试（tools/test_safe_kill.py）\n'
+if OUT=$($PY tools/test_safe_kill.py 2>&1); then
+  N=$(printf '%s' "$OUT" | grep -c '^PASS')
+  ok "$N 项对抗用例全部通过"
+  printf '      含关键用例：跨用户同名进程必须被拒，理由为属主不符\n'
+else
+  bad "对抗测试未全通过 —— 按 SKILL.md 标准该版本不可发布"
+  printf '%s\n' "$OUT" | grep '^FAIL' | head -6
+fi
+
 # ── 2. MCP 契约与安全边界 ────────────────────────────────────
-printf '\n[2/5] MCP Server 契约与安全边界（tools/test_mcp_server.sh）\n'
+printf '\n[2/6] MCP Server 契约与安全边界（tools/test_mcp_server.sh）\n'
 if OUT=$(bash tools/test_mcp_server.sh 2>&1); then
   grep -q '"protocolVersion": "2024-11-05"' <<<"$OUT" && ok "MCP 握手，protocolVersion 2024-11-05" || bad "握手失败"
   grep -q 'PATH_DENIED'   <<<"$OUT" && ok "越权路径被拒（PATH_DENIED）"      || bad "越权路径未被拒绝"
@@ -43,7 +54,7 @@ else
 fi
 
 # ── 3. GPU 退化路径卡死回放（漏报侧）─────────────────────────
-printf '\n[3/5] GPU 退化路径卡死回放 —— 漏报侧（evidence/gpu-stall/）\n'
+printf '\n[3/6] GPU 退化路径卡死回放 —— 漏报侧（evidence/gpu-stall/）\n'
 for R in "runA:ep 4 begin:909" "runB:ep 11 begin:318"; do
   NAME="${R%%:*}"; REST="${R#*:}"; LINE="${REST%%:*}"; WANT="${REST##*:}"
   SIG="evidence/gpu-stall/${NAME}-signals.jsonl"
@@ -64,7 +75,7 @@ for R in "runA:ep 4 begin:909" "runB:ep 11 begin:318"; do
 done
 
 # ── 4. 误报侧回放 ────────────────────────────────────────────
-printf '\n[4/5] 误报侧回放\n'
+printf '\n[4/6] 误报侧回放\n'
 # 负样本 C 随仓库发布，开箱即测：150 分钟真实成功训练，日志稀疏
 SIGN="evidence/gpu-stall/runN-signals.jsonl"; LOGN="evidence/gpu-stall/runN-train.log"
 if [[ -f "$SIGN" && -f "$LOGN" ]]; then
@@ -106,7 +117,7 @@ else
 fi
 
 # ── 5. 静态预检工具 ──────────────────────────────────────────
-printf '\n[5/5] 提交前静态预检（tools/config_precheck.py）\n'
+printf '\n[5/6] 提交前静态预检（tools/config_precheck.py）\n'
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 mk() { printf '&time_control\n run_hours = 6,\n restart = .true.,\n restart_interval = %s,\n%s/\n' "$1" "$2" > "$TMP/namelist.input"; }
 
