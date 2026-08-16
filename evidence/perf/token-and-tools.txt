@@ -1,0 +1,8 @@
+# Token 与 Tool 成功率实测原始输出
+
+## 单轮
+{"prompt_tokens": 1163, "total_tokens": 1535, "completion_tokens": 372, "prompt_tokens_details": {"cached_tokens": 0, "text_tokens": 1163}, "completion_tokens_details": {"reasoning_tokens": 195, "text_tokens": 372}}
+
+## Tool 成功率（来自 Matrix 完整记录）
+execute_shell_command 14 / read_file 5 / glob_search 3 / edit_file 1 = 23
+被沙箱拦截 1 (4.3%)  执行报错 0  Tool 成功率 95.7%
