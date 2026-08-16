@@ -142,13 +142,13 @@ GPU 型 workload 上，若出现「CPU 打满 + GPU 闲置」的退化画像，�
 
 ```
 adapters/
-  wrf.yaml        进度行正则、输出文件 glob、阈值
-  roms.yaml
-  coawst.yaml
-  mitgcm.yaml
-  pytorch.yaml
-  download.yaml
-  generic.yaml
+  wrf.json        进度行正则、输出文件 glob、阈值
+  roms.json
+  coawst.json
+  mitgcm.json
+  pytorch.json
+  download.json
+  generic.json
 ```
 
 接一个新场景 = 写一个 adapter 配置，不改 Skill 逻辑、不改 Agent。
@@ -223,15 +223,16 @@ Sentinel Agent 的主 Skill。输出 `STALLED` 或 `DEAD` 时，Sentinel 不自�
 
 回归测试固化为 `tools/test_decide.py`（17 项，纯标准库），每次 PR 必跑。
 
-### 已跑过的评估（2026-08-15）
+### 已跑过的评估（2026-08-15 / 2026-08-16）
 
 | 数据集 | 规模 | 结果 |
 |---|---|---|
 | GPU 退化路径 · 20s 采样（[measure-06](../../evidence/measure-06-gpu-stall.md)） | 65 个真实快照 | 0.1.0 **全程漏报**；0.2.0 漏报时延 **909s** |
-| GPU 退化路径 · 10s 采样（[measure-07](../../evidence/measure-07-sampling-rate.md)） | 45 个真实快照 | 0.1.0 **全程漏报**；0.2.0 漏报时延 **318s** |
+| GPU 退化路径 · 10s 采样（[measure-07](../../evidence/measure-07-sampling-rate.md)） | 63 个真实快照 | 0.1.0 **全程漏报**；0.2.0 漏报时延 **318s** |
 | 语义单测 | 17 项 | 全通过，含纯 CPU workload 与预处理阶段的防误报护栏 |
 | **误报** · COAWST 耦合 33.79h 成功运行（[measure-08](../../evidence/measure-08-false-positive-and-perf.md)） | 28800 个进度点 | 当前阈值 1800s → **误报 0 次**；误报归零的最小阈值 600s，裕量 3 倍 |
 | **误报** · 18 GB 下载 4.29h 成功完成 | 351824 个进度点 | 全部采样×阈值组合 → **误报 0 次** |
+| **误报** · GPU 训练 150 min 真实成功运行（[measure-09](../../evidence/measure-09-baseline.md) 负样本 C） | 日志最长静默 18.2 min、产物最长静默 27.5 min | 本方案 **误报 0 次**（只看日志的基线误报 190/192 次） |
 
 **漏报与误报的权衡（选工作点的依据）**：
 
@@ -252,8 +253,8 @@ GPU 训练建议 ≤ 10 秒。
 
 **已知局限**（不隐瞒）：
 
-- **GPU 训练场景的误报率仍无数据。** 误报测的是 CPU 型 workload（COAWST、下载），
-  训练作业的正常静默分布可能不同，缺一份成功跑完的训练日志。
+- ~~**GPU 训练场景的误报率仍无数据。**~~ ✅ 已补：[measure-09](../../evidence/measure-09-baseline.md) 负样本 C，
+  150 分钟真实成功训练（日志静默 18.2 分钟、产物静默 27.5 分钟），误报 0 次；但仅单卡、单一训练脚本，样本仍不足以谈泛化。
 - 误报样本共 3 个作业（累计 40.6 小时），其中两个来自同一集群同一团队。时长是真实的，
   但样本多样性不足以谈"泛化"。
 - 两次 GPU 实验都是**构造的复现**而非生产事故现场。

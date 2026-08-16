@@ -21,7 +21,7 @@ Triage 的职责描述只写了前者，结果链路在第二棒静默中断 —
 | **Role** | 多信号采集与"是否有进度"的语义判定 |
 | **Capabilities** | 能：拉日志尾、stat 输出文件、采样 CPU/GPU/IO、按 workload 类型选适配器、输出进度判定与置信度。<br>**不能**：执行任何写操作、不能终止进程、不能修改配置 |
 | **Inputs** | 作业 ID、workload 类型、运行目录、上一轮快照 |
-| **Outputs** | `ProgressVerdict{ status, signals{log,file,resource}, confidence, stalled_for_sec, next_poll_sec }` |
+| **Outputs** | `ProgressVerdict{ status, signals{log,file,resource,gpu}, confidence, stalled_for_sec, degradation_suspected, next_poll_sec }` |
 | **Dependencies** | Skill: `progress-probe`、`resource-guard`；集群适配器 |
 | **Decision Boundary** | 全自主，风险等级 L0（只读）。判定 STALLED 时**不自行处置**，只连同三类信号原始值升级给 Triage |
 | **Trace** | 每轮采集一条 span，含三类信号原始值；快照存入 Incident State，判定过程可回放 |

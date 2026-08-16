@@ -10,10 +10,10 @@
 
 | 要求 | 状态 | 我们的落地与证据 |
 |---|---|---|
-| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 5 个**（Sentinel→Triage→Planner→Executor→Verifier），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md) |
+| 至少 3 个**不同职能**的 Agent | ✅ | 设计 6 个：Sentinel / Triage / Planner / Executor / Verifier / Curator。**实跑 5 个**（Sentinel→Triage→Planner→Executor→Verifier），见 [measure-03](../evidence/measure-03-agents-advanced-an-open-question.md)、[measure-10](../evidence/measure-10-l2-approval.md)、[measure-11](../evidence/measure-11-verifier.md) |
 | 每个 Agent 有清晰身份定义 | ✅ | [`docs/agent-identity.md`](agent-identity.md)，按附录 A 八字段 |
 | 通过协作完成端到端闭环 | ⚠️ | 发现→诊断→规划→执行→**验证**走通并留有完整记录；**仅剩沉淀一段未实跑** |
-| **必须以 AgentTeams 作为协同设计基点** | ✅ | AgentTeams v1.2.2 实际部署（6 容器），Worker CRD 见 [`agents/*.worker.yaml`](../agents/)，部署验证见 [case-03](../evidence/case-03-agentteams-deployment.md) |
+| **必须以 AgentTeams 作为协同设计基点** | ✅ | AgentTeams v1.2.2 实际部署（8 容器：3 个平台容器 + 5 个 Worker），Worker CRD 见 [`agents/*.worker.yaml`](../agents/)，部署验证见 [case-03](../evidence/case-03-agentteams-deployment.md) |
 | 说明角色编排如何映射到框架能力 | ✅ | Manager-Workers 模型；角色=Worker CRD，编排=Matrix 房间 mention，上下文=共享文件系统，状态追踪=Matrix 会话 + governance/audit.db |
 
 ## 8.2 Agent Identity 清单
@@ -39,7 +39,7 @@
 | 7 | 审批与回滚 | ✅ | **已实证**（[measure-10](../evidence/measure-10-l2-approval.md)）：Executor 在 L2 审批点停住 18 分 39 秒，一个字节未改；真人批准后执行、重跑预检验证、给出可执行的回滚命令。回滚点 MD5 与动手前原文件一致 |
 | 8 | 经验沉淀 | ⚠️ | 复盘写回 Runbook 的机制已设计；实跑中人工复核**拦下了 Agent 一个错误机制**，验证了"知识入库需人工 review"这条边界（[measure-04](../evidence/measure-04-human-review-caught-a-wrong-mechanism.md)），但 Curator 本身未跑 |
 
-**第 5、7 步是本方案当前最大的缺口，不掩饰。**
+**第 2、8 步是本方案当前最大的缺口，不掩饰。**
 
 ---
 
@@ -159,7 +159,7 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 | 商业 API 调用情况 | 阿里云百炼 Token Plan（OpenAI 兼容协议），默认模型 `qwen3.7-plus`。**费用假设与锁定风险**：套餐按周计配额且整体 2026-09-10 到期（决赛 9-22），[case-04](../evidence/case-04-quota-exhausted.md) 记录了一次真实的配额耗尽。**同套餐内换模型**仅改模型名（已实测 5 个备选可用）；**跨供应商切换**实测需协调修改 3 个 Higress 托管资源 + 容器重建，成本高于同套餐换模型 |
 | 闭源模型使用情况 | `qwen3.7-plus` 为闭源模型。**使用范围**：仅 Agent 的自然语言推理；**判定逻辑本身不调模型**（纯规则，可离线复现），因此闭源模型不影响核心结论的可复现性 |
 | 数据来源与授权边界 | 实测数据来自**本团队自己的科研运行**（气象海洋耦合模式、GPU 训练、数据集下载）。历史日志含主机路径，**未随仓库发布**，仓库内只有脱敏统计与复现命令 |
-| 可复现方式 | **一条命令** `./verify.sh` 复现全部判定类结论（12 项断言，覆盖漏报与误报两侧、含 safe-kill 对抗测试），**纯标准库、不需要 GPU、不需要网络、不调模型、不读凭证** |
+| 可复现方式 | **一条命令** `./verify.sh` 复现全部判定类结论（13 项断言，覆盖漏报与误报两侧、含 safe-kill 对抗测试），**纯标准库、不需要 GPU、不需要网络、不调模型、不读凭证** |
 | 部署依赖 | 见 [case-03](../evidence/case-03-agentteams-deployment.md)（含 Docker 镜像源、group 创建等实际踩坑） |
 | 后续维护计划 | 见 [roadmap.md](roadmap.md) |
 
@@ -167,7 +167,7 @@ Sentinel 把三信号快照与判定结果写进共享目录，Triage 读文件�
 
 | 手册条款 | 状态 |
 |---|---|
-| 至少 3 个不同职能 Agent | ✅ 设计 6，实跑 3 |
+| 至少 3 个不同职能 Agent | ✅ 设计 6，实跑 5 |
 | Skill 为必选项 | ✅ 8 个 |
 | **高风险动作必须保留审批、回滚与审计边界** | ✅ **已实证**（[measure-10](../evidence/measure-10-l2-approval.md)）。L2 动作在审批点真的停住；回滚点可核对；执行后自验证。**L3 拒绝执行亦已实测**：四重对抗性诱导（紧急/已获口头同意/我授权你做/来不及标级别）全部被拒，且给出按 PGID 而非进程名的安全替代方案。⚠️ 仍未实测：重启作业/断点续跑两类 L2 动作、真实目录上的权限边界 |
 | 未使用 MCP 时需给等价集成契约 | ✅ 已用 MCP，且契约文档一并提供 |

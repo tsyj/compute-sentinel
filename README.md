@@ -71,7 +71,7 @@ Prometheus 看不出来，日志告警也看不出来，因为**长时任务的�
 ./verify.sh
 ```
 
-一条命令重算本仓库全部判定类结论：**12 项断言，不需要 GPU、不需要网络、不调任何大模型、不读任何凭证**，纯 Python 标准库。
+一条命令重算本仓库全部判定类结论：**13 项断言，不需要 GPU、不需要网络、不调任何大模型、不读任何凭证**，纯 Python 标准库。
 
 ```
 [1/6] 判定内核语义单测            17 项断言全部通过
@@ -81,7 +81,7 @@ Prometheus 看不出来，日志告警也看不出来，因为**长时任务的�
 [4/6] 误报侧回放                  150 分钟真实成功训练（日志静默 18.2 分钟）误报 0 次
 [5/6] 静态预检                    三个配置状态：两个真根因检出 + 修正后零误报
 
-通过 12  失败 0
+通过 11  失败 0  跳过 2
 ```
 
 第 4 项默认用随仓库发布的 GPU 训练负样本，**无需任何外部文件**。另有两份历史科研运行日志（含主机路径，未随仓库发布），设 `COAWST_LOG=` 与 `DOWNLOAD_LOG=` 后可一并复现，缺失时自动跳过并标注。
@@ -95,7 +95,7 @@ Prometheus 看不出来，日志告警也看不出来，因为**长时任务的�
 评委不必翻遍仓库找证据：[`docs/requirements-mapping.md`](docs/requirements-mapping.md)
 把手册第 8–11 章的**每一条技术要求**对到我们的落地位置与证据文件，
 状态只有三种：✅ 已实现且有证据 ／ ⚠️ 已实现但证据不足 ／ ❌ 未实现。
-其中 ❌ 有 3 条、⚠️ 有 8 条，全部写明原因。
+其中 ❌ 有 2 条、⚠️ 有 6 条，全部写明原因。
 
 ---
 
@@ -151,16 +151,16 @@ evidence/    真实故障日志与运行证据（脱敏后）
 
 | 项 | 状态 |
 |---|---|
-| 问题定义与真实事故证据 | ✅ 三个案例，原始日志可复核 |
+| 问题定义与真实事故证据 | ✅ 四个案例，原始日志可复核 |
 | 六 Agent 职责与决策边界 | ✅ [`docs/agent-identity.md`](docs/agent-identity.md) |
 | 八 Skill 规格（含版本演进与能力评估） | ✅ [`skills/`](skills/) |
 | AgentTeams 部署与凭证隔离验证 | ✅ [证据案例 03](evidence/case-03-agentteams-deployment.md) |
 | `config-precheck` 可运行实现 + 实测 | ✅ [实测 01](evidence/measure-01-config-precheck.md)，四状态验证、真实配置零误报 |
-| 多 Agent 闭环实跑（Sentinel→Triage→Planner） | ✅ [实测 03](evidence/measure-03-agents-advanced-an-open-question.md) |
-| MCP 等价集成契约 | ⬜ 同上 |
-| `progress-probe` 可运行原型 | ⬜ 同上 |
-| Executor 安全分级实证（L0–L3） | ⬜ 同上 |
-| workload adapter 全套 | ⬜ 同上 |
+| 多 Agent 闭环实跑（Sentinel→Triage→Planner→Executor→Verifier） | ✅ [实测 03](evidence/measure-03-agents-advanced-an-open-question.md) · [实测 10](evidence/measure-10-l2-approval.md) · [实测 11](evidence/measure-11-verifier.md)；⚠️ Curator 未实跑（仅 `agents/curator.yaml` 草稿） |
+| MCP Server 与集成契约 | ✅ [`tools/cluster_mcp_server.py`](tools/cluster_mcp_server.py) + [`docs/integration-contract.md`](docs/integration-contract.md)，握手/越权拒绝/注入拒绝随 `./verify.sh` 实测 |
+| `progress-probe` 可运行实现 + 实测 | ✅ 判定内核 `decide()` 见 [`tools/cluster_mcp_server.py`](tools/cluster_mcp_server.py)；漏报侧 [实测 06](evidence/measure-06-gpu-stall.md)/[07](evidence/measure-07-sampling-rate.md)、误报侧 [实测 08](evidence/measure-08-false-positive-and-perf.md)、基线对照 [实测 09](evidence/measure-09-baseline.md) |
+| Executor 安全分级实证（L0–L3） | ✅ [实测 10](evidence/measure-10-l2-approval.md)：L2 审批点停住 18 分 39 秒、回滚点可核对；L3 四重诱导全部拒绝。⚠️ 重启作业/断点续跑两类 L2 动作未测 |
+| workload adapter | ✅ [`adapters/`](adapters/) 7 份 JSON（coawst / download / generic / mitgcm / pytorch / roms / wrf），每次判定返回带 `adapter` 字段 |
 
 **已跑通的部分都有可复核的证据；未做的部分在上表里，不含糊。**
 
@@ -173,9 +173,9 @@ evidence/    真实故障日志与运行证据（脱敏后）
 | 项目 | 说明 |
 |---|---|
 | 本项目协议 | **Apache License 2.0**（与上游 AgentTeams 一致） |
-| 开放范围 | Agent 定义、Skill 规格、workload adapter 规范、预检工具、证据与实测报告**全部开放** |
+| 开放范围 | Agent 定义、Skill 规格、workload adapter 规范、预检工具、MCP Server、证据与实测报告**全部开放** |
 | 暂不开放 | 原始运行日志中包含他人作业信息与内网路径的部分（脱敏后再发布，见 `evidence/README.md`） |
-| 上游贡献 | 部署与实跑中发现 **6 个问题**，已整理为可直接提交的 issue 正文（含最小复现、影响与建议改法）：[`docs/upstream-issues.md`](docs/upstream-issues.md)。<br>其中 1 条为 **CLI 帮助文本泄露真实 API Key**，按安全问题流程私下报告；<br>`progress-probe` 的 adapter 规范若通用，另行提 PR |
+| 上游贡献 | 部署与实跑中发现 **8 个问题**，已整理为可直接提交的 issue 正文（含最小复现、影响与建议改法）：[`docs/upstream-issues.md`](docs/upstream-issues.md)。<br>其中 1 条为 **CLI 帮助文本泄露真实 API Key**，按安全问题流程私下报告；<br>`progress-probe` 的 adapter 规范若通用，另行提 PR |
 
 ### 第三方依赖
 
@@ -195,7 +195,7 @@ evidence/    真实故障日志与运行证据（脱敏后）
 | 套餐 | Token Plan Standard，**2026-08-09 开通，2026-09-10 到期** |
 | 接口 | OpenAI 兼容协议，`https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
 | 调用环节 | **仅 Agent 推理**。`config_precheck` 等确定性工具**不调用任何模型** |
-| 费用假设 | 套餐制，含 5 小时 / 7 天双重限额；单次事故处理实测消耗约 20 万 token 量级 |
+| 费用假设 | 套餐制，含 5 小时 / 7 天双重限额；实测单轮 1555 tokens、5 轮工具往返累计 9908（[实测 12](evidence/measure-12-token-cost.md)），一次完整 L2 处置按增长曲线外推约 5 万–8 万 tokens（外推估算，非实测） |
 | 权限范围 | API Key 权限为「全部」（宽于实际所需，后续应收窄至模型调用） |
 | 密钥管理 | 真实 Key **只存在于网关侧**，Worker 仅持消费令牌（见 [证据案例 03](evidence/case-03-agentteams-deployment.md) 的 401/200 对照实验） |
 | **锁定风险** | **中**。接口为 OpenAI 兼容协议，换供应商只需改 Base URL 与模型名；<br>但套餐到期（9-10）晚于复赛（9-3）、**早于决赛（9-22）**，需提前续期 |
@@ -205,7 +205,7 @@ evidence/    真实故障日志与运行证据（脱敏后）
 | 项目 | 说明 |
 |---|---|
 | 模型 | **`qwen3.7-plus`**（闭源，通过百炼 API 调用） |
-| 使用范围 | Sentinel / Triage / Planner 三个 Agent 的推理 |
+| 使用范围 | Sentinel / Triage / Planner / Executor / Verifier 五个已部署 Agent 的推理 |
 | 选择原因 | 赛道承办方生态内、国内直连稳定、Token Plan 套餐已覆盖 |
 | 备选 | 同套餐内已实测可用：`qwen3.8-max`、`qwen3.7-max`、`qwen3.6-flash`、`deepseek-v4-pro`、`glm-5.2` |
 | 迁移成本 | **低**。模型名是一处配置项，Agent 定义与 Skill 规格与模型无关 |
@@ -229,7 +229,7 @@ bash tools/reproduce_case01.sh
 
 # Agent 部分（需 Docker + 模型 API Key）
 bash <(curl -sSL https://raw.githubusercontent.com/agentscope-ai/AgentTeams/main/install/agentteams-install.sh)
-agt apply -f agents/sentinel.worker.yaml   # triage / planner 同理
+agt apply -f agents/sentinel.worker.yaml   # triage / planner / executor / verifier 同理
 ```
 
 已知环境坑（实测踩过，见 [证据案例 03](evidence/case-03-agentteams-deployment.md)）：
@@ -238,5 +238,5 @@ Worker 容器不继承 Manager 的 host-share 挂载；Matrix 房间内纯文本
 
 ### 后续维护计划
 
-初赛后按 `docs/roadmap.md` 推进：补齐可观测链路、MCP 等价契约、`progress-probe` 原型、
-Executor 安全分级实证。上游可复用的部分持续向 AgentTeams 社区提交。
+初赛后按 `docs/roadmap.md` 推进：Curator 实跑与经验沉淀入库、Manager taskflow 派单接入、重复实验验证稳定性、
+可观测 OTel 语义映射与时序/向量后端、多卡/分布式训练与非本机 workload 实测。上游可复用的部分持续向 AgentTeams 社区提交。
